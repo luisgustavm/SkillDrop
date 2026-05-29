@@ -1,0 +1,28 @@
+const favicon = `<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="128" height="128" rx="30" fill="#0f172a"/>
+  <rect x="10" y="10" width="108" height="108" rx="24" fill="url(#paint0_linear)"/>
+  <path d="M38 34C38 29.5817 41.5817 26 46 26H79.6C82.2548 26 84.8 27.054 86.6769 28.9309L97.0691 39.3231C98.946 41.2 100 43.7452 100 46.4V90C100 94.4183 96.4183 98 92 98H46C41.5817 98 38 94.4183 38 90V34Z" fill="white" fill-opacity="0.96"/>
+  <path d="M80 28V44C80 46.2091 81.7909 48 84 48H98" stroke="#dbeafe" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M54 55H82" stroke="#2563eb" stroke-width="7" stroke-linecap="round"/>
+  <path d="M54 72H75" stroke="#14b8a6" stroke-width="7" stroke-linecap="round"/>
+  <path d="M33 56C33 50.4772 37.4772 46 43 46H54V61H44.5C43.1193 61 42 62.1193 42 63.5C42 64.8807 43.1193 66 44.5 66H51C58.1797 66 64 71.8203 64 79C64 86.1797 58.1797 92 51 92H32V77H51C52.3807 77 53.5 75.8807 53.5 74.5C53.5 73.1193 52.3807 72 51 72H46C38.8203 72 33 66.1797 33 59V56Z" fill="#0f172a"/>
+  <path d="M22 82C22 76.4772 26.4772 72 32 72H44C49.5228 72 54 76.4772 54 82V92C54 97.5228 49.5228 102 44 102H32C26.4772 102 22 97.5228 22 92V82Z" fill="#14b8a6"/>
+  <path d="M34 84L38 80L42 84" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M38 80V94" stroke="white" stroke-width="4" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="paint0_linear" x1="18" y1="16" x2="110" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563eb"/>
+      <stop offset="0.56" stop-color="#0f9f8f"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+</svg>`;
+
+export function GET() {
+  return new Response(favicon, {
+    headers: {
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "Content-Type": "image/svg+xml; charset=utf-8",
+    },
+  });
+}
