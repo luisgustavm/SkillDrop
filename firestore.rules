@@ -1,0 +1,208 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owns(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isSharedUpload() {
+      return resource.data.visibility == "shared";
+    }
+
+    function isCodeLanguage(language) {
+      return language in ["javascript", "typescript", "python", "java", "csharp", "html", "css", "sql"];
+    }
+
+    function isValidCodeSnippet(data) {
+      return data.keys().hasOnly([
+          "userId", "authorName", "authorAvatar", "title", "language", "extension", "code", "createdAt", "updatedAt"
+        ])
+        && data.authorName is string
+        && data.authorName.size() > 0
+        && data.authorName.size() <= 80
+        && (data.authorAvatar == null || data.authorAvatar is string)
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 120
+        && isCodeLanguage(data.language)
+        && data.extension is string
+        && data.extension.size() > 0
+        && data.extension.size() <= 12
+        && data.code is string
+        && data.code.size() > 0
+        && data.code.size() <= 50000;
+    }
+
+    function isValidGlobalAttachment(attachment) {
+      return attachment == null || (
+        attachment is map
+        && attachment.keys().hasOnly(["name", "mimeType", "size", "dataUrl", "kind"])
+        && attachment.name is string
+        && attachment.name.size() > 0
+        && attachment.name.size() <= 120
+        && attachment.mimeType is string
+        && attachment.mimeType.size() > 0
+        && attachment.mimeType.size() <= 120
+        && attachment.size is int
+        && attachment.size > 0
+        && attachment.size <= 512 * 1024
+        && attachment.dataUrl is string
+        && attachment.dataUrl.size() > 0
+        && attachment.dataUrl.size() <= 760000
+        && attachment.kind in ["image", "file"]
+      );
+    }
+
+    function isValidRoom(data) {
+      return data.keys().hasOnly([
+          "code", "name", "ownerId", "ownerName", "memberIds", "memberCount",
+          "lastMessageText", "lastMessageAuthorName", "lastMessageAt", "createdAt", "updatedAt"
+        ])
+        && data.code is string
+        && data.code.size() == 8
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 80
+        && data.ownerId is string
+        && data.ownerName is string
+        && data.ownerName.size() > 0
+        && data.ownerName.size() <= 80
+        && data.memberIds is list
+        && data.memberCount is int
+        && data.memberCount >= 1
+        && data.lastMessageText is string
+        && data.lastMessageText.size() <= 1000
+        && data.lastMessageAuthorName is string
+        && data.lastMessageAuthorName.size() <= 80;
+    }
+
+    function isRoomMember(roomId) {
+      return signedIn()
+        && request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.memberIds;
+    }
+
+    function isJoiningRoom() {
+      return signedIn()
+        && !(request.auth.uid in resource.data.memberIds)
+        && request.auth.uid in request.resource.data.memberIds
+        && request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1
+        && request.resource.data.memberCount == resource.data.memberCount + 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["memberIds", "memberCount", "updatedAt"]);
+    }
+
+    function isMemberRoomUpdate() {
+      return signedIn()
+        && request.auth.uid in resource.data.memberIds
+        && request.resource.data.code == resource.data.code
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.memberIds == resource.data.memberIds
+        && request.resource.data.memberCount == resource.data.memberCount
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name", "lastMessageText", "lastMessageAuthorName", "lastMessageAt", "updatedAt"
+        ]);
+    }
+
+    function isValidRoomMessage(data) {
+      return data.keys().hasOnly(["userId", "authorName", "authorAvatar", "content", "attachment", "createdAt"])
+        && data.userId == request.auth.uid
+        && data.authorName is string
+        && data.authorName.size() > 0
+        && data.authorName.size() <= 80
+        && (data.authorAvatar == null || data.authorAvatar is string)
+        && data.content is string
+        && data.content.size() <= 1000
+        && (data.content.size() > 0 || data.attachment != null)
+        && isValidGlobalAttachment(data.attachment);
+    }
+
+    match /users/{userId} {
+      allow read, create, update: if owns(userId);
+      allow delete: if false;
+    }
+
+    match /uploads/{uploadId} {
+      allow read: if owns(resource.data.userId) || isSharedUpload();
+      allow create: if owns(request.resource.data.userId)
+        && request.resource.data.title is string
+        && request.resource.data.fileUrl is string
+        && request.resource.data.fileType in [
+          "pdf", "document", "archive", "image", "video", "text", "code", "link", "other"
+        ]
+        && request.resource.data.visibility in ["private", "shared"]
+        && request.resource.data.size <= 100 * 1024 * 1024;
+      allow update, delete: if owns(resource.data.userId);
+    }
+
+    match /favorites/{favoriteId} {
+      allow read, update, delete: if owns(resource.data.userId);
+      allow create: if owns(request.resource.data.userId);
+    }
+
+    match /comments/{commentId} {
+      allow read: if signedIn();
+      allow create: if owns(request.resource.data.userId);
+      allow update, delete: if owns(resource.data.userId);
+    }
+
+    match /chats/{messageId} {
+      allow read: if owns(resource.data.userId);
+      allow create: if owns(request.resource.data.userId);
+      allow update, delete: if false;
+    }
+
+    match /globalMessages/{messageId} {
+      allow read: if signedIn();
+      allow create: if owns(request.resource.data.userId)
+        && request.resource.data.keys().hasOnly(["userId", "authorName", "authorAvatar", "content", "attachment", "createdAt"])
+        && request.resource.data.authorName is string
+        && request.resource.data.authorName.size() > 0
+        && request.resource.data.authorName.size() <= 80
+        && (request.resource.data.authorAvatar == null || request.resource.data.authorAvatar is string)
+        && request.resource.data.content is string
+        && request.resource.data.content.size() <= 1000
+        && (request.resource.data.content.size() > 0 || request.resource.data.attachment != null)
+        && isValidGlobalAttachment(request.resource.data.attachment);
+      allow update, delete: if owns(resource.data.userId);
+    }
+
+    match /rooms/{roomId} {
+      allow get: if signedIn();
+      allow list: if signedIn() && request.auth.uid in resource.data.memberIds;
+      allow create: if owns(request.resource.data.ownerId)
+        && request.resource.data.code == roomId
+        && request.resource.data.memberIds.size() == 1
+        && request.resource.data.memberIds[0] == request.auth.uid
+        && isValidRoom(request.resource.data);
+      allow update: if isValidRoom(request.resource.data) && (isJoiningRoom() || isMemberRoomUpdate());
+      allow delete: if owns(resource.data.ownerId);
+
+      match /messages/{messageId} {
+        allow read: if isRoomMember(roomId);
+        allow create: if isRoomMember(roomId) && isValidRoomMessage(request.resource.data);
+        allow update, delete: if false;
+      }
+    }
+
+    match /codeSnippets/{snippetId} {
+      allow read: if signedIn();
+      allow create: if owns(request.resource.data.userId) && isValidCodeSnippet(request.resource.data);
+      allow update: if owns(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && isValidCodeSnippet(request.resource.data);
+      allow delete: if owns(resource.data.userId);
+    }
+
+    match /activityLogs/{activityId} {
+      allow read: if owns(resource.data.userId);
+      allow create: if owns(request.resource.data.userId);
+      allow update, delete: if false;
+    }
+  }
+}
