@@ -58,7 +58,6 @@ service cloud.firestore {
       );
     }
 
-<<<<<<< HEAD
     function isValidRoom(data) {
       return data.keys().hasOnly([
           "code", "name", "ownerId", "ownerName", "memberIds", "memberCount",
@@ -122,8 +121,6 @@ service cloud.firestore {
         && isValidGlobalAttachment(data.attachment);
     }
 
-=======
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
     match /users/{userId} {
       allow read, create, update: if owns(userId);
       allow delete: if false;
@@ -174,7 +171,6 @@ service cloud.firestore {
       allow update, delete: if owns(resource.data.userId);
     }
 
-<<<<<<< HEAD
     match /rooms/{roomId} {
       allow get: if signedIn();
       allow list: if signedIn() && request.auth.uid in resource.data.memberIds;
@@ -193,8 +189,6 @@ service cloud.firestore {
       }
     }
 
-=======
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
     match /codeSnippets/{snippetId} {
       allow read: if signedIn();
       allow create: if owns(request.resource.data.userId) && isValidCodeSnippet(request.resource.data);
