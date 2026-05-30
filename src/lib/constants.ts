@@ -1,10 +1,6 @@
 export const APP_NAME = "SkillDrop";
 
-<<<<<<< HEAD
 export const PRIVATE_ROUTES = ["/dashboard", "/uploads", "/editor", "/chat", "/rooms", "/global-chat", "/shared"];
-=======
-export const PRIVATE_ROUTES = ["/dashboard", "/uploads", "/editor", "/chat", "/global-chat", "/shared"];
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
 
 export const AUTH_ROUTES = ["/login", "/register", "/reset-password"];
 

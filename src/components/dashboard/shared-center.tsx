@@ -47,11 +47,7 @@ export function SharedCenter() {
       <section className="rounded-lg border bg-card">
         <div className="border-b p-5">
           <h1 className="text-xl font-semibold tracking-normal">Central de compartilhamento</h1>
-<<<<<<< HEAD
           <p className="mt-1 text-sm text-muted-foreground">Links e QR Codes para apresentar ou revisar materiais compartilháveis.</p>
-=======
-          <p className="mt-1 text-sm text-muted-foreground">Links públicos protegidos pelas regras do Firestore.</p>
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
         </div>
         <div className="divide-y">
           {sharedUploads.map((upload) => (
@@ -85,11 +81,7 @@ export function SharedCenter() {
         ) : null}
         {selectedUpload?.storageProvider === "browser" ? (
           <p className="text-xs text-muted-foreground">
-<<<<<<< HEAD
             Este material está disponível no dispositivo de envio. Para acesso em outros dispositivos, prefira compartilhar links externos.
-=======
-            Arquivos gratuitos ficam no navegador de envio. O QR Code compartilha metadados; o arquivo abre no mesmo navegador.
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
           </p>
         ) : null}
       </aside>

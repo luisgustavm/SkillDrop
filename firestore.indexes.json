@@ -39,7 +39,6 @@
         { "fieldPath": "shareId", "order": "ASCENDING" },
         { "fieldPath": "visibility", "order": "ASCENDING" }
       ]
-<<<<<<< HEAD
     },
     {
       "collectionGroup": "rooms",
@@ -48,8 +47,6 @@
         { "fieldPath": "memberIds", "arrayConfig": "CONTAINS" },
         { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ]
-=======
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
     }
   ],
   "fieldOverrides": []

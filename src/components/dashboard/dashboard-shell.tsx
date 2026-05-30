@@ -6,15 +6,9 @@ import {
   Bot,
   Code2,
   LayoutDashboard,
-<<<<<<< HEAD
   LockKeyhole,
   LogOut,
   Menu,
-=======
-  LogOut,
-  Menu,
-  MessageCircle,
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
   Moon,
   Search,
   Share2,
@@ -37,19 +31,12 @@ const navigation = [
   { href: "/uploads", label: "Uploads", icon: UploadCloud },
   { href: "/editor", label: "Editor", icon: Code2 },
   { href: "/chat", label: "IA", icon: Bot },
-<<<<<<< HEAD
   { href: "/rooms", label: "Salas privadas", icon: LockKeyhole },
-=======
-  { href: "/global-chat", label: "Chat global", icon: MessageCircle },
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
   { href: "/shared", label: "Compartilhar", icon: Share2 },
 ];
 
 function pageTitle(pathname: string) {
-<<<<<<< HEAD
   if (pathname.startsWith("/global-chat")) return "Salas privadas";
-=======
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
   return navigation.find((item) => pathname.startsWith(item.href))?.label ?? "Dashboard";
 }
 
@@ -104,11 +91,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </span>
             <div>
               <p className="text-sm font-semibold leading-none">{APP_NAME}</p>
-<<<<<<< HEAD
               <p className="mt-1 text-xs text-muted-foreground">Área acadêmica</p>
-=======
-              <p className="mt-1 text-xs text-muted-foreground">Campus workspace</p>
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
             </div>
           </Link>
           <Button

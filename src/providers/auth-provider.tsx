@@ -16,11 +16,8 @@ import type { SkillDropUser } from "@/types/user";
 
 type AuthContextValue = {
   firebaseReady: boolean;
-<<<<<<< HEAD
   testModeAvailable: boolean;
   testMode: boolean;
-=======
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
   user: User | null;
   profile: SkillDropUser | null;
   loading: boolean;
@@ -29,10 +26,7 @@ type AuthContextValue = {
   register: (name: string, email: string, password: string) => Promise<void>;
   loginGoogle: () => Promise<void>;
   loginGuest: () => Promise<void>;
-<<<<<<< HEAD
   loginTest: () => Promise<void>;
-=======
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   getIdToken: () => Promise<string | null>;
@@ -40,10 +34,7 @@ type AuthContextValue = {
 
 const SESSION_COOKIE_NAME = "skilldrop_session";
 const ID_TOKEN_COOKIE_NAME = "skilldrop_id_token";
-<<<<<<< HEAD
 const TEST_SESSION_STORAGE_KEY = "skilldrop_test_session";
-=======
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const ID_TOKEN_MAX_AGE_SECONDS = 60 * 55;
 
@@ -85,7 +76,6 @@ function buildFallbackProfile(currentUser: User, displayName?: string): SkillDro
   };
 }
 
-<<<<<<< HEAD
 function isLocalTestHost() {
   if (typeof window === "undefined") return false;
 
@@ -132,18 +122,13 @@ function buildTestUser(): User {
   } as User;
 }
 
-=======
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<SkillDropUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-<<<<<<< HEAD
   const [testModeAvailable, setTestModeAvailable] = useState(false);
   const [testMode, setTestMode] = useState(false);
-=======
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
 
   const syncProfileInBackground = useCallback(async (currentUser: User, displayName?: string) => {
     try {
@@ -182,7 +167,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void syncProfileInBackground(currentUser, displayName);
   }, [syncProfileInBackground, syncTokenCookieInBackground]);
 
-<<<<<<< HEAD
   const applyTestSession = useCallback((enabled: boolean) => {
     if (!enabled) {
       setTestMode(false);
@@ -221,15 +205,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTestModeAvailable(false);
     setTestMode(false);
 
-=======
-  useEffect(() => {
-    if (!isFirebaseConfigured) {
-      setLoading(false);
-      setError("Firebase não está configurado. Confira o arquivo .env.local.");
-      return;
-    }
-
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
     const auth = getClientAuth();
     const unsubscribe = onIdTokenChanged(auth, (currentUser) => {
       setLoading(true);
@@ -246,11 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return unsubscribe;
-<<<<<<< HEAD
   }, [applySession, applyTestSession]);
-=======
-  }, [applySession]);
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
 
   const runAuthAction = useCallback(
     async (action: () => Promise<User>, displayName?: string) => {
@@ -289,11 +260,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       firebaseReady: isFirebaseConfigured,
-<<<<<<< HEAD
       testModeAvailable,
       testMode,
-=======
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
       user,
       profile,
       loading,
@@ -302,7 +270,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register: (name, email, password) => runAuthAction(() => registerWithEmail(name, email, password), name),
       loginGoogle: () => runAuthAction(loginWithGoogle),
       loginGuest: () => runAuthAction(loginAsGuest),
-<<<<<<< HEAD
       loginTest: async () => {
         if (!testModeAvailable) {
           throw new Error("Modo teste disponível apenas no localhost sem Firebase configurado.");
@@ -326,17 +293,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       getIdToken: () => user?.getIdToken() ?? Promise.resolve(null),
     }),
     [applySession, applyTestSession, error, loading, profile, runAuthAction, runVoidAuthAction, testMode, testModeAvailable, user],
-=======
-      resetPassword: (email) => runVoidAuthAction(() => recoverPassword(email)),
-      logout: () =>
-        runVoidAuthAction(async () => {
-          await logoutUser();
-          applySession(null);
-        }),
-      getIdToken: () => user?.getIdToken() ?? Promise.resolve(null),
-    }),
-    [applySession, error, loading, profile, runAuthAction, runVoidAuthAction, user],
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

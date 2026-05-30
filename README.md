@@ -1,10 +1,6 @@
 # SkillDrop
 
-<<<<<<< HEAD
 SkillDrop é uma plataforma web SaaS para estudantes criarem salas privadas, enviarem, organizarem, visualizarem e compartilharem atividades acadêmicas: PDFs, imagens, ZIPs, vídeos, documentos, códigos-fonte, links e projetos.
-=======
-SkillDrop é uma plataforma web SaaS para estudantes enviarem, organizarem, visualizarem e compartilharem atividades acadêmicas: PDFs, imagens, ZIPs, vídeos, documentos, códigos-fonte, links e projetos.
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
 
 ## Stack
 
@@ -14,10 +10,7 @@ SkillDrop é uma plataforma web SaaS para estudantes enviarem, organizarem, visu
 - Arquivos em IndexedDB local do navegador, sem custo de Firebase Storage
 - OpenAI API com streaming em `/api/ai/chat`
 - Monaco Editor, React Hook Form, Zod e Zustand
-<<<<<<< HEAD
 - Salas privadas por código ou link, com mensagens e anexos pequenos por sala
-=======
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
 
 ## Instalação
 

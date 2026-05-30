@@ -16,17 +16,10 @@ export function UploadPage() {
   return (
     <div className="space-y-6">
       <section>
-<<<<<<< HEAD
         <p className="text-sm font-medium text-primary">Organização de materiais</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-normal">Enviar atividade</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           Adicione arquivos, links, tags e observações para manter suas entregas fáceis de encontrar.
-=======
-        <p className="text-sm font-medium text-primary">Upload inteligente</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-normal">Enviar atividade</h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Validação, prévia, progresso, cancelamento e metadados persistidos no Firebase.
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
         </p>
       </section>
 

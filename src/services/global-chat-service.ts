@@ -42,19 +42,11 @@ export async function createGlobalChatAttachment(file: File): Promise<GlobalChat
   const isImage = file.type.startsWith("image/");
 
   if (file.size > MAX_GLOBAL_CHAT_ATTACHMENT_BYTES) {
-<<<<<<< HEAD
     throw new Error("O anexo precisa ter até 512 KB.");
   }
 
   if (!isImage && !ACCEPTED_EXTENSIONS.includes(extension)) {
     throw new Error(`Formato .${extension || "desconhecido"} não é aceito.`);
-=======
-    throw new Error("O anexo precisa ter até 512 KB no chat global.");
-  }
-
-  if (!isImage && !ACCEPTED_EXTENSIONS.includes(extension)) {
-    throw new Error(`Formato .${extension || "desconhecido"} não é aceito no chat global.`);
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
   }
 
   return {

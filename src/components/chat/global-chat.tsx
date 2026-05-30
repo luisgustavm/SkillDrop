@@ -1,7 +1,6 @@
 "use client";
 
 import {
-<<<<<<< HEAD
   Copy,
   DoorOpen,
   Download,
@@ -29,33 +28,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { UserAvatar } from "@/components/shared/user-avatar";
-=======
-  Download,
-  FileText,
-  Globe2,
-  ImagePlus,
-  Loader2,
-  MessageCircle,
-  Paperclip,
-  Send,
-  ShieldCheck,
-  SmilePlus,
-  X,
-} from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
-import { EmptyState } from "@/components/shared/empty-state";
-import { ErrorState } from "@/components/shared/error-state";
-import { UserAvatar } from "@/components/shared/user-avatar";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
 import { useAuth } from "@/hooks/use-auth";
 import { sanitizeFileName } from "@/lib/sanitize";
 import { cn } from "@/lib/utils";
 import {
-<<<<<<< HEAD
   createPrivateRoom,
   joinPrivateRoom,
   listenRoomMessages,
@@ -230,54 +206,11 @@ export function GlobalChat() {
       },
     );
   }, [activeRoomId, firebaseReady]);
-=======
-  createGlobalChatAttachment,
-  listenGlobalMessages,
-  MAX_GLOBAL_CHAT_ATTACHMENT_BYTES,
-  sendGlobalMessage,
-} from "@/services/global-chat-service";
-import type { GlobalChatAttachment, GlobalChatMessage } from "@/types/chat";
-import { formatRelativeDate } from "@/utils/date";
-import { formatBytes } from "@/utils/file";
-
-const emojiOptions = ["😀", "😂", "😍", "😎", "🔥", "✨", "👏", "🙏", "💡", "✅", "📚", "💻", "🚀", "🎯", "🧠", "⭐"];
-const attachmentAccept = "image/*,.pdf,.doc,.docx,.zip,.txt,.md,.js,.jsx,.ts,.tsx,.py,.java,.cs,.html,.css,.sql,.json";
-
-export function GlobalChat() {
-  const { user, profile } = useAuth();
-  const [messages, setMessages] = useState<GlobalChatMessage[]>([]);
-  const [content, setContent] = useState("");
-  const [attachment, setAttachment] = useState<GlobalChatAttachment | null>(null);
-  const [emojiOpen, setEmojiOpen] = useState(false);
-  const [preparingAttachment, setPreparingAttachment] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const endRef = useRef<HTMLDivElement | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    setLoading(true);
-
-    return listenGlobalMessages(
-      (items) => {
-        setMessages(items);
-        setLoading(false);
-      },
-      (chatError) => {
-        setError(chatError.message);
-        setLoading(false);
-      },
-    );
-  }, []);
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
 
-<<<<<<< HEAD
   const createRoom = async () => {
     if (!user) return;
 
@@ -307,27 +240,17 @@ export function GlobalChat() {
   const submitMessage = async () => {
     const trimmedContent = content.trim();
     if ((!trimmedContent && !attachment) || !user || !activeRoom) return;
-=======
-  const submit = async () => {
-    const trimmedContent = content.trim();
-    if ((!trimmedContent && !attachment) || !user) return;
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
 
     setSending(true);
     setError(null);
 
     try {
-<<<<<<< HEAD
       const messageInput = {
-=======
-      await sendGlobalMessage({
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
         userId: user.uid,
         authorName: profile?.name ?? user.displayName ?? "Estudante",
         authorAvatar: profile?.avatar ?? user.photoURL ?? null,
         content: trimmedContent,
         attachment,
-<<<<<<< HEAD
       };
       if (firebaseReady) {
         await sendRoomMessage(activeRoom.id, messageInput);
@@ -340,14 +263,6 @@ export function GlobalChat() {
       setAttachment(null);
     } catch (messageError) {
       const message = messageError instanceof Error ? messageError.message : "Não foi possível enviar a mensagem.";
-=======
-      });
-      setContent("");
-      setAttachment(null);
-      setEmojiOpen(false);
-    } catch (chatError) {
-      const message = chatError instanceof Error ? chatError.message : "Não foi possível enviar a mensagem.";
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
       setError(message);
       toast.error(message);
     } finally {
@@ -355,23 +270,6 @@ export function GlobalChat() {
     }
   };
 
-<<<<<<< HEAD
-=======
-  const insertEmoji = (emoji: string) => {
-    const textarea = textareaRef.current;
-    const start = textarea?.selectionStart ?? content.length;
-    const end = textarea?.selectionEnd ?? content.length;
-    const nextContent = `${content.slice(0, start)}${emoji}${content.slice(end)}`;
-
-    setContent(nextContent);
-    setEmojiOpen(false);
-    requestAnimationFrame(() => {
-      textarea?.focus();
-      textarea?.setSelectionRange(start + emoji.length, start + emoji.length);
-    });
-  };
-
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
   const selectAttachment = async (file: File | undefined) => {
     if (!file) return;
 
@@ -392,7 +290,6 @@ export function GlobalChat() {
     }
   };
 
-<<<<<<< HEAD
   const copyText = async (value: string, successMessage: string) => {
     await navigator.clipboard.writeText(value);
     toast.success(successMessage);
@@ -606,125 +503,11 @@ export function GlobalChat() {
       </div>
 
       <aside className="space-y-4 rounded-lg border bg-card p-5">
-=======
-  return (
-    <section className="grid min-h-[calc(100vh-128px)] gap-6 xl:grid-cols-[1fr_320px]">
-      <div className="flex min-h-[640px] flex-col overflow-hidden rounded-lg border bg-card">
-        <div className="border-b p-4">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <MessageCircle className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <div>
-              <h2 className="text-base font-semibold">Chat global</h2>
-              <p className="text-sm text-muted-foreground">Converse com todos os estudantes conectados ao SkillDrop.</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 space-y-4 overflow-y-auto p-4">
-          {loading ? <GlobalChatSkeleton /> : null}
-
-          {!loading && !messages.length ? (
-            <EmptyState
-              icon={Globe2}
-              title="Nenhuma mensagem ainda"
-              description="Envie a primeira mensagem para abrir a conversa da turma."
-            />
-          ) : null}
-
-          {messages.map((message) => (
-            <GlobalMessageBubble key={message.id} message={message} mine={message.userId === user?.uid} />
-          ))}
-          <div ref={endRef} />
-        </div>
-
-        {error ? (
-          <div className="border-t p-3">
-            <ErrorState message={error} className="p-3" />
-          </div>
-        ) : null}
-
-        <div className="border-t p-4">
-          {attachment ? <PendingAttachment attachment={attachment} onRemove={() => setAttachment(null)} /> : null}
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="flex flex-1 flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative">
-                  <Button type="button" variant="outline" size="icon" title="Adicionar emoji" onClick={() => setEmojiOpen((value) => !value)}>
-                    <SmilePlus className="h-4 w-4" aria-hidden="true" />
-                  </Button>
-                  {emojiOpen ? (
-                    <div className="absolute bottom-12 left-0 z-20 grid w-56 grid-cols-8 gap-1 rounded-lg border bg-popover p-2 shadow-lg">
-                      {emojiOptions.map((emoji) => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          className="flex h-8 w-8 items-center justify-center rounded-md text-base transition hover:bg-muted"
-                          onClick={() => insertEmoji(emoji)}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  title="Anexar foto ou arquivo"
-                  disabled={preparingAttachment}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {preparingAttachment ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Paperclip className="h-4 w-4" aria-hidden="true" />
-                  )}
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept={attachmentAccept}
-                  className="hidden"
-                  onChange={(event) => void selectAttachment(event.target.files?.[0])}
-                />
-              </div>
-
-              <Textarea
-                ref={textareaRef}
-                value={content}
-                maxLength={1000}
-                onChange={(event) => setContent(event.target.value)}
-                placeholder="Escreva uma mensagem para o chat global..."
-                className="min-h-16 resize-none"
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                    void submit();
-                  }
-                }}
-              />
-            </div>
-            <Button type="button" disabled={sending || preparingAttachment || (!content.trim() && !attachment)} onClick={() => void submit()}>
-              {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
-              Enviar
-            </Button>
-          </div>
-          <p className="mt-2 text-right text-xs text-muted-foreground">{content.length}/1000</p>
-        </div>
-      </div>
-
-      <aside className="rounded-lg border bg-card p-5">
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
             <ShieldCheck className="h-5 w-5" aria-hidden="true" />
           </span>
           <div>
-<<<<<<< HEAD
             <h2 className="text-base font-semibold">Convite seguro</h2>
             <p className="text-sm text-muted-foreground">A entrada acontece por código ou link.</p>
           </div>
@@ -762,28 +545,13 @@ export function GlobalChat() {
             <Paperclip className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
             <p>Anexos pequenos podem ser enviados junto da conversa.</p>
           </div>
-=======
-            <h2 className="text-base font-semibold">Comunidade</h2>
-            <p className="text-sm text-muted-foreground">Mensagens em tempo real via Firestore.</p>
-          </div>
-        </div>
-        <div className="mt-5 space-y-3 text-sm text-muted-foreground">
-          <p>Seu nome aparece junto da mensagem para manter a conversa clara.</p>
-          <p>As regras do Firestore bloqueiam envio em nome de outro usuário.</p>
-          <p>Fotos e arquivos pequenos podem ser enviados com limite de {formatBytes(MAX_GLOBAL_CHAT_ATTACHMENT_BYTES)} por mensagem.</p>
-          <p>Mensagens antigas ficam limitadas para manter a tela rápida.</p>
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
         </div>
       </aside>
     </section>
   );
 }
 
-<<<<<<< HEAD
 function RoomMessageBubble({ message, mine }: { message: RoomMessage; mine: boolean }) {
-=======
-function GlobalMessageBubble({ message, mine }: { message: GlobalChatMessage; mine: boolean }) {
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
   return (
     <div className={cn("flex gap-3", mine && "justify-end")}>
       {!mine ? <UserAvatar src={message.authorAvatar} name={message.authorName} /> : null}
@@ -879,7 +647,6 @@ function AttachmentIcon({ attachment }: { attachment: GlobalChatAttachment }) {
   );
 }
 
-<<<<<<< HEAD
 function RoomListSkeleton() {
   return (
     <div className="space-y-2">
@@ -897,12 +664,6 @@ function MessageSkeleton() {
   return (
     <div className="space-y-4">
       {[0, 1, 2].map((item) => (
-=======
-function GlobalChatSkeleton() {
-  return (
-    <div className="space-y-4">
-      {[0, 1, 2, 3].map((item) => (
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
         <div key={item} className={cn("flex gap-3", item % 2 === 1 && "justify-end")}>
           {item % 2 === 0 ? <Skeleton className="h-10 w-10 rounded-md" /> : null}
           <div className="w-full max-w-md rounded-lg border p-3">

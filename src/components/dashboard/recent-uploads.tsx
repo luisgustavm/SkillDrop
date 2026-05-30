@@ -56,11 +56,7 @@ export function RecentUploads({ userId, uploads, favoriteUploadIds }: RecentUplo
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-base font-semibold">Uploads recentes</h2>
-<<<<<<< HEAD
             <p className="text-sm text-muted-foreground">Materiais recentes com tags, status e ações rápidas.</p>
-=======
-            <p className="text-sm text-muted-foreground">Arquivos salvos grátis no navegador e metadados no Firestore.</p>
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
           </div>
           <div className="flex flex-wrap gap-2">
             <select
@@ -136,11 +132,7 @@ export function RecentUploads({ userId, uploads, favoriteUploadIds }: RecentUplo
           );
         }) : (
           <div className="p-4">
-<<<<<<< HEAD
             <EmptyState title="Nada nesse filtro" description="Ajuste tipo, visibilidade ou busca para encontrar materiais." />
-=======
-            <EmptyState title="Nada nesse filtro" description="Ajuste tipo, visibilidade ou busca global para encontrar materiais." />
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
           </div>
         )}
       </div>

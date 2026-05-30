@@ -33,20 +33,12 @@ export function DashboardClient() {
       <section className="glass-panel rounded-lg border p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-<<<<<<< HEAD
             <p className="text-sm font-medium text-primary">Central acadêmica</p>
-=======
-            <p className="text-sm font-medium text-primary">Workspace acadêmico</p>
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
             <h2 className="mt-2 text-2xl font-semibold tracking-normal sm:text-3xl">
               Bom estudo, {profile?.name?.split(" ")[0] ?? "estudante"}.
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-<<<<<<< HEAD
               Organize entregas, acompanhe materiais importantes e converse com a IA em um só lugar.
-=======
-              Organize entregas, visualize materiais importantes e converse com a IA sem sair da sua área.
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
             </p>
           </div>
         </div>

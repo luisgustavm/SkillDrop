@@ -20,11 +20,7 @@ export type StoredLocalFile = {
 
 function assertBrowserStorage() {
   if (typeof window === "undefined" || !("indexedDB" in window)) {
-<<<<<<< HEAD
     throw new Error("O armazenamento deste dispositivo não está disponível.");
-=======
-    throw new Error("Armazenamento local do navegador não está disponível.");
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
   }
 }
 
@@ -42,11 +38,7 @@ function openDatabase() {
     };
 
     request.onsuccess = () => resolve(request.result);
-<<<<<<< HEAD
     request.onerror = () => reject(request.error ?? new Error("Não foi possível abrir a biblioteca local."));
-=======
-    request.onerror = () => reject(request.error ?? new Error("Não foi possível abrir o IndexedDB."));
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
   });
 }
 
@@ -110,20 +102,12 @@ export async function openAcademicUpload(upload: AcademicUpload) {
 
   const localFileId = upload.localFileId ?? getLocalFileIdFromUrl(upload.fileUrl);
   if (!localFileId) {
-<<<<<<< HEAD
     throw new Error("Não encontramos o arquivo deste material.");
-=======
-    throw new Error("Arquivo local não encontrado nos metadados.");
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
   }
 
   const record = await getLocalFile(localFileId);
   if (!record) {
-<<<<<<< HEAD
     throw new Error("Este material está disponível apenas no dispositivo em que foi enviado.");
-=======
-    throw new Error("Este arquivo está salvo apenas no navegador em que foi enviado.");
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
   }
 
   const objectUrl = URL.createObjectURL(record.blob);
@@ -150,20 +134,12 @@ export async function downloadAcademicUpload(upload: AcademicUpload) {
 
   const localFileId = upload.localFileId ?? getLocalFileIdFromUrl(upload.fileUrl);
   if (!localFileId) {
-<<<<<<< HEAD
     throw new Error("Não encontramos o arquivo deste material.");
-=======
-    throw new Error("Arquivo local não encontrado nos metadados.");
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
   }
 
   const record = await getLocalFile(localFileId);
   if (!record) {
-<<<<<<< HEAD
     throw new Error("Este material está disponível apenas no dispositivo em que foi enviado.");
-=======
-    throw new Error("Este arquivo está salvo apenas no navegador em que foi enviado.");
->>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
   }
 
   const objectUrl = URL.createObjectURL(record.blob);
