@@ -79,7 +79,11 @@ export function ShareViewer({ shareId }: { shareId: string }) {
       </div>
       {upload.storageProvider === "browser" ? (
         <p className="mt-4 rounded-md border bg-muted/60 p-3 text-sm text-muted-foreground">
+<<<<<<< HEAD
           Este material está disponível no dispositivo de envio. Para acesso em outros dispositivos, prefira compartilhar links externos.
+=======
+          Este arquivo foi salvo gratuitamente no navegador de quem enviou. O link compartilha os metadados; o arquivo abre apenas nesse mesmo navegador.
+>>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
         </p>
       ) : null}
       {shareUrl ? <div className="mt-6"><QrShare url={shareUrl} /></div> : null}

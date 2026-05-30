@@ -160,7 +160,11 @@ export function UploadDropzone({ userId }: UploadDropzoneProps) {
         {upload.status === "completed" ? (
           <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+<<<<<<< HEAD
             Material salvo com sucesso na sua biblioteca.
+=======
+            Arquivo salvo grátis no navegador e metadados salvos no Firestore.
+>>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
           </div>
         ) : null}
       </section>
@@ -168,7 +172,11 @@ export function UploadDropzone({ userId }: UploadDropzoneProps) {
       <section className="rounded-lg border bg-card p-5">
         <div>
           <h2 className="text-base font-semibold">Metadados</h2>
+<<<<<<< HEAD
           <p className="text-sm text-muted-foreground">Essas informações ajudam você a encontrar e compartilhar o material depois.</p>
+=======
+          <p className="text-sm text-muted-foreground">O arquivo fica no navegador; essas informações serão salvas no Firestore.</p>
+>>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
         </div>
 
         <div className="mt-5 space-y-4">

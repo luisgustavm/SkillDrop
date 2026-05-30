@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { listenActivities } from "@/services/activity-service";
 import { listenFavorites } from "@/services/favorite-service";
 import { listenUserUploads } from "@/services/upload-service";
+<<<<<<< HEAD
 import { isFirebaseConfigured } from "@/firebase/client";
+=======
+>>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
 import type { ActivityLog } from "@/types/activity";
 import type { Favorite } from "@/types/favorite";
 import type { AcademicUpload } from "@/types/upload";
@@ -29,11 +32,19 @@ export function useDashboardData(userId?: string) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+<<<<<<< HEAD
     if (!userId || !isFirebaseConfigured) {
       setUploads([]);
       setFavorites([]);
       setActivities([]);
       setLoaded(isFirebaseConfigured ? initialLoadedState : { uploads: true, favorites: true, activities: true });
+=======
+    if (!userId) {
+      setUploads([]);
+      setFavorites([]);
+      setActivities([]);
+      setLoaded(initialLoadedState);
+>>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
       return;
     }
 

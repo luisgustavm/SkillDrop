@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import Link from "next/link";
 import { ArrowRight, Bot, CheckCircle2, FileUp, LockKeyhole, QrCode, ShieldCheck, UsersRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -194,4 +195,10 @@ function ProductScene() {
       </div>
     </div>
   );
+=======
+import { redirect } from "next/navigation";
+
+export default function HomePage() {
+  redirect("/dashboard");
+>>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
 }

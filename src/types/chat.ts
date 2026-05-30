@@ -32,6 +32,7 @@ export interface GlobalChatMessage {
   attachment: GlobalChatAttachment | null;
   createdAt: Date | null;
 }
+<<<<<<< HEAD
 
 export interface PrivateRoom {
   id: string;
@@ -57,3 +58,5 @@ export interface RoomMessage {
   attachment: GlobalChatAttachment | null;
   createdAt: Date | null;
 }
+=======
+>>>>>>> 5fd6ae362174970f3e29bd386dec61cde1224472
