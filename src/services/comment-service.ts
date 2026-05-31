@@ -20,6 +20,7 @@ import { toDate } from "@/utils/date";
 
 export async function createComment(input: {
   userId: string;
+  roomId?: string | null;
   uploadId: string;
   authorName: string;
   authorAvatar: string | null;
@@ -34,6 +35,7 @@ export async function createComment(input: {
   });
   await createActivityLog({
     userId: input.userId,
+    roomId: input.roomId,
     type: "comment_created",
     message: "Um comentário foi publicado.",
     uploadId: input.uploadId,

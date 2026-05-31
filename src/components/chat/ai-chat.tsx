@@ -23,7 +23,11 @@ const tasks = [
 
 type AiTask = (typeof tasks)[number]["value"];
 
-export function AiChat() {
+type AiChatProps = {
+  roomId: string;
+};
+
+export function AiChat({ roomId }: AiChatProps) {
   const { user, getIdToken } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [prompt, setPrompt] = useState("");
@@ -36,8 +40,8 @@ export function AiChat() {
   useEffect(() => {
     if (!user?.uid) return;
 
-    return listenChatHistory(user.uid, setMessages, (chatError) => setError(chatError.message));
-  }, [user?.uid]);
+    return listenChatHistory(user.uid, roomId, setMessages, (chatError) => setError(chatError.message));
+  }, [roomId, user?.uid]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -53,7 +57,7 @@ export function AiChat() {
     setStreamingAnswer("");
 
     try {
-      await saveChatMessage({ userId: user.uid, role: "user", content });
+      await saveChatMessage({ userId: user.uid, roomId, role: "user", content });
       const token = await getIdToken();
       const response = await fetch("/api/ai/chat", {
         method: "POST",
@@ -63,6 +67,7 @@ export function AiChat() {
         },
         body: JSON.stringify({
           task,
+          roomId,
           messages: [...messages.slice(-12).map(({ role, content: messageContent }) => ({ role, content: messageContent })), { role: "user", content }],
         }),
       });
@@ -85,7 +90,7 @@ export function AiChat() {
       }
 
       if (answer.trim()) {
-        await saveChatMessage({ userId: user.uid, role: "assistant", content: answer.trim() });
+        await saveChatMessage({ userId: user.uid, roomId, role: "assistant", content: answer.trim() });
       }
       setStreamingAnswer("");
     } catch (chatError) {

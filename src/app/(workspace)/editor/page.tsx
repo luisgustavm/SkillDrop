@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { CodeWorkspace } from "@/components/editor/code-workspace";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Editor",
 };
 
 export default function EditorPage() {
-  return <CodeWorkspace />;
+  redirect("/rooms");
 }

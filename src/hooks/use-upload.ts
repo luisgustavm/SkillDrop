@@ -2,14 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getFirebaseErrorMessage } from "@/firebase/errors";
-import { saveLocalFile } from "@/services/local-file-service";
-import { saveUploadMetadata } from "@/services/upload-service";
+import { saveUploadMetadata, uploadAcademicFile } from "@/services/upload-service";
 import type { CreateUploadInput, UploadProgress } from "@/types/upload";
 import { validateUploadFile } from "@/utils/file";
 
 type UploadStatus = "idle" | "ready" | "uploading" | "paused" | "completed" | "error" | "cancelled";
 
-export function useUpload(userId?: string) {
+export function useUpload(userId?: string, roomId?: string) {
   const cancelledRef = useRef(false);
   const retryRef = useRef<{ file: File; metadata: CreateUploadInput } | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -62,6 +61,12 @@ export function useUpload(userId?: string) {
         return;
       }
 
+      if (!roomId) {
+        setError("Entre em uma sala para enviar arquivos.");
+        setStatus("error");
+        return;
+      }
+
       if (!currentFile) {
         setError("Selecione um arquivo antes de enviar.");
         setStatus("error");
@@ -72,18 +77,27 @@ export function useUpload(userId?: string) {
       cancelledRef.current = false;
       setStatus("uploading");
       setError(null);
-      setProgress({ bytesTransferred: 0, totalBytes: currentFile.size, percentage: 8 });
+      setProgress({ bytesTransferred: 0, totalBytes: currentFile.size, percentage: 0 });
 
       try {
-        const localFileId = await saveLocalFile(currentFile);
+        const uploadedFile = await uploadAcademicFile({
+          userId,
+          roomId,
+          file: currentFile,
+          onProgress: (nextProgress) => {
+            if (!cancelledRef.current) setProgress(nextProgress);
+          },
+        });
+
         if (cancelledRef.current) throw new Error("Upload cancelado.");
 
-        setProgress({ bytesTransferred: Math.round(currentFile.size * 0.72), totalBytes: currentFile.size, percentage: 72 });
         await saveUploadMetadata({
           userId,
+          roomId,
           file: currentFile,
           metadata,
-          localFileId,
+          fileUrl: uploadedFile.fileUrl,
+          storagePath: uploadedFile.storagePath,
         });
         if (cancelledRef.current) throw new Error("Upload cancelado.");
 
@@ -96,7 +110,7 @@ export function useUpload(userId?: string) {
         throw new Error(message);
       }
     },
-    [file, userId],
+    [file, roomId, userId],
   );
 
   const pauseUpload = useCallback(() => {

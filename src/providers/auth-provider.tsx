@@ -5,7 +5,6 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { getClientAuth, isFirebaseConfigured } from "@/firebase/client";
 import { getFirebaseErrorMessage } from "@/firebase/errors";
 import {
-  loginAsGuest,
   loginWithEmail,
   loginWithGoogle,
   logoutUser,
@@ -23,7 +22,6 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   loginGoogle: () => Promise<void>;
-  loginGuest: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   getIdToken: () => Promise<string | null>;
@@ -189,7 +187,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login: (email, password) => runAuthAction(() => loginWithEmail(email, password)),
       register: (name, email, password) => runAuthAction(() => registerWithEmail(name, email, password), name),
       loginGoogle: () => runAuthAction(loginWithGoogle),
-      loginGuest: () => runAuthAction(loginAsGuest),
       resetPassword: (email) => runVoidAuthAction(() => recoverPassword(email)),
       logout: () =>
         runVoidAuthAction(async () => {

@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/shared/user-avatar";
@@ -26,18 +26,30 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useUiStore } from "@/store/ui-store";
 
-const navigation = [
-  { href: "/rooms", label: "Salas privadas", icon: LockKeyhole },
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/uploads", label: "Uploads", icon: UploadCloud },
-  { href: "/editor", label: "Editor", icon: Code2 },
-  { href: "/chat", label: "IA", icon: Bot },
-  { href: "/shared", label: "Compartilhar", icon: Share2 },
-];
+const lobbyNavigation = [{ href: "/rooms", label: "Salas privadas", icon: LockKeyhole }];
 
-function pageTitle(pathname: string) {
+function createRoomNavigation(roomId: string | null) {
+  if (!roomId) return lobbyNavigation;
+
+  const roomBase = `/rooms/${encodeURIComponent(roomId)}`;
+
+  return [
+    { href: roomBase, label: "Sala", icon: LockKeyhole },
+    { href: `${roomBase}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
+    { href: `${roomBase}/uploads`, label: "Uploads", icon: UploadCloud },
+    { href: `${roomBase}/editor`, label: "Editor", icon: Code2 },
+    { href: `${roomBase}/chat`, label: "IA", icon: Bot },
+    { href: `${roomBase}/shared`, label: "Compartilhar", icon: Share2 },
+  ];
+}
+
+function pageTitle(pathname: string, roomNavigation: ReturnType<typeof createRoomNavigation>) {
   if (pathname.startsWith("/global-chat")) return "Salas privadas";
-  return navigation.find((item) => pathname.startsWith(item.href))?.label ?? "Dashboard";
+  const activeItem = [...roomNavigation]
+    .sort((left, right) => right.href.length - left.href.length)
+    .find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
+
+  return activeItem?.label ?? "Salas privadas";
 }
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -51,10 +63,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const globalSearch = useUiStore((state) => state.globalSearch);
   const setGlobalSearch = useUiStore((state) => state.setGlobalSearch);
   const resolvedTheme = theme === "dark" ? "light" : "dark";
+  const activeRoomId = useMemo(() => {
+    const roomMatch = pathname.match(/^\/rooms\/([^/]+)/);
+
+    return roomMatch?.[1] ? decodeURIComponent(roomMatch[1]) : null;
+  }, [pathname]);
+  const navigation = useMemo(() => createRoomNavigation(activeRoomId), [activeRoomId]);
 
   useEffect(() => {
     navigation.forEach((item) => router.prefetch(item.href));
-  }, [router]);
+  }, [navigation, router]);
 
   const navigate = (href: string) => {
     router.prefetch(href);
@@ -91,7 +109,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </span>
             <div>
               <p className="text-sm font-semibold leading-none">{APP_NAME}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Área acadêmica</p>
+              <p className="mt-1 text-xs text-muted-foreground">{activeRoomId ? `Sala ${activeRoomId}` : "Area academica"}</p>
             </div>
           </Link>
           <Button
@@ -108,7 +126,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
         <nav className="flex-1 space-y-1 px-3 py-4">
           {navigation.map((item) => {
-            const active = pathname.startsWith(item.href);
+            const roomHomeHref = activeRoomId ? `/rooms/${encodeURIComponent(activeRoomId)}` : "/rooms";
+            const active = item.href === roomHomeHref
+              ? pathname === item.href
+              : pathname === item.href || pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
 
             return (
@@ -160,14 +181,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </Button>
             <div className="hidden min-w-40 sm:block">
               <p className="text-xs text-muted-foreground">SkillDrop</p>
-              <h1 className="text-lg font-semibold leading-tight">{pageTitle(pathname)}</h1>
+              <h1 className="text-lg font-semibold leading-tight">{pageTitle(pathname, navigation)}</h1>
             </div>
             <div className="relative ml-auto w-full max-w-xl">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input
                 value={globalSearch}
                 onChange={(event) => setGlobalSearch(event.target.value)}
-                placeholder="Buscar arquivos, tags e atividades"
+                placeholder={activeRoomId ? "Buscar nesta sala" : "Buscar salas"}
                 className="pl-9"
               />
             </div>

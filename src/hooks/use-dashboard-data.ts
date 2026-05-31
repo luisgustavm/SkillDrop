@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { listenActivities } from "@/services/activity-service";
+import { listenActivities, listenRoomActivities } from "@/services/activity-service";
 import { listenFavorites } from "@/services/favorite-service";
-import { listenUserUploads } from "@/services/upload-service";
+import { listenRoomUploads, listenUserUploads } from "@/services/upload-service";
 import { isFirebaseConfigured } from "@/firebase/client";
 import type { ActivityLog } from "@/types/activity";
 import type { Favorite } from "@/types/favorite";
@@ -21,7 +21,7 @@ const initialLoadedState: LoadedState = {
   activities: false,
 };
 
-export function useDashboardData(userId?: string) {
+export function useDashboardData(userId?: string, roomId?: string | null) {
   const [uploads, setUploads] = useState<AcademicUpload[]>([]);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [activities, setActivities] = useState<ActivityLog[]>([]);
@@ -49,7 +49,14 @@ export function useDashboardData(userId?: string) {
       setLoaded((state) => ({ ...state, favorites: true, activities: true }));
     };
 
-    const unsubscribeUploads = listenUserUploads(
+    const unsubscribeUploads = roomId ? listenRoomUploads(
+      roomId,
+      (items) => {
+        setUploads(items);
+        setLoaded((state) => ({ ...state, uploads: true }));
+      },
+      handleRequiredError,
+    ) : listenUserUploads(
       userId,
       (items) => {
         setUploads(items);
@@ -65,7 +72,14 @@ export function useDashboardData(userId?: string) {
       },
       handleOptionalError,
     );
-    const unsubscribeActivities = listenActivities(
+    const unsubscribeActivities = roomId ? listenRoomActivities(
+      roomId,
+      (items) => {
+        setActivities(items);
+        setLoaded((state) => ({ ...state, activities: true }));
+      },
+      handleOptionalError,
+    ) : listenActivities(
       userId,
       (items) => {
         setActivities(items);
@@ -79,7 +93,7 @@ export function useDashboardData(userId?: string) {
       unsubscribeFavorites();
       unsubscribeActivities();
     };
-  }, [userId]);
+  }, [roomId, userId]);
 
   const stats = useMemo(
     () => ({

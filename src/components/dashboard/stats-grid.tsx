@@ -11,7 +11,7 @@ type StatsGridProps = {
 export function StatsGrid({ stats }: StatsGridProps) {
   const items = [
     { label: "Uploads", value: stats.totalUploads.toString(), icon: Files },
-    { label: "Armazenamento local", value: formatBytes(stats.totalStorageBytes), icon: HardDrive },
+    { label: "Armazenamento", value: formatBytes(stats.totalStorageBytes), icon: HardDrive },
     { label: "Favoritos", value: stats.totalFavorites.toString(), icon: Star },
     { label: "Compartilhados", value: stats.sharedUploads.toString(), icon: Share2 },
   ];

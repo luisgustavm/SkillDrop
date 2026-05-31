@@ -49,7 +49,11 @@ const languages: Array<{ label: string; value: CodeLanguage; extension: string }
 
 const defaultLanguage = languages[1];
 
-export function CodeWorkspace() {
+type CodeWorkspaceProps = {
+  roomId: string;
+};
+
+export function CodeWorkspace({ roomId }: CodeWorkspaceProps) {
   const { user, profile } = useAuth();
   const [title, setTitle] = useState("");
   const [code, setCode] = useState("");
@@ -81,6 +85,7 @@ export function CodeWorkspace() {
     setLoadingSnippets(true);
 
     return listenCodeSnippets(
+      roomId,
       (items) => {
         setSnippets(items);
         setLoadingSnippets(false);
@@ -90,7 +95,7 @@ export function CodeWorkspace() {
         setLoadingSnippets(false);
       },
     );
-  }, [user?.uid]);
+  }, [roomId, user?.uid]);
 
   const resetDraft = () => {
     setTitle("");
@@ -118,6 +123,7 @@ export function CodeWorkspace() {
     try {
       const payload = {
         userId: user.uid,
+        roomId,
         authorName: profile?.name ?? user.displayName ?? "Estudante",
         authorAvatar: profile?.avatar ?? user.photoURL ?? null,
         title,

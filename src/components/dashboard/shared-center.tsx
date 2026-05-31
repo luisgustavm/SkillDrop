@@ -13,9 +13,13 @@ import { useDashboardData } from "@/hooks/use-dashboard-data";
 import type { AcademicUpload } from "@/types/upload";
 import { cn } from "@/lib/utils";
 
-export function SharedCenter() {
+type SharedCenterProps = {
+  roomId: string;
+};
+
+export function SharedCenter({ roomId }: SharedCenterProps) {
   const { user } = useAuth();
-  const { uploads } = useDashboardData(user?.uid);
+  const { uploads } = useDashboardData(user?.uid, roomId);
   const sharedUploads = uploads.filter((upload) => upload.visibility === "shared");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [origin, setOrigin] = useState("");

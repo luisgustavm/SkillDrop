@@ -14,14 +14,32 @@ service cloud.firestore {
       return resource.data.visibility == "shared";
     }
 
+    function isValidRoomId(roomId) {
+      return roomId is string && roomId.size() == 8;
+    }
+
+    function canReadRoom(roomId) {
+      return isValidRoomId(roomId) && isRoomMember(roomId);
+    }
+
+    function canReadUpload(uploadId) {
+      return signedIn()
+        && (
+          get(/databases/$(database)/documents/uploads/$(uploadId)).data.userId == request.auth.uid
+          || get(/databases/$(database)/documents/uploads/$(uploadId)).data.visibility == "shared"
+          || canReadRoom(get(/databases/$(database)/documents/uploads/$(uploadId)).data.roomId)
+        );
+    }
+
     function isCodeLanguage(language) {
       return language in ["javascript", "typescript", "python", "java", "csharp", "html", "css", "sql"];
     }
 
     function isValidCodeSnippet(data) {
       return data.keys().hasOnly([
-          "userId", "authorName", "authorAvatar", "title", "language", "extension", "code", "createdAt", "updatedAt"
+          "userId", "roomId", "authorName", "authorAvatar", "title", "language", "extension", "code", "createdAt", "updatedAt"
         ])
+        && isValidRoomId(data.roomId)
         && data.authorName is string
         && data.authorName.size() > 0
         && data.authorName.size() <= 80
@@ -86,7 +104,38 @@ service cloud.firestore {
 
     function isRoomMember(roomId) {
       return signedIn()
+        && isValidRoomId(roomId)
         && request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.memberIds;
+    }
+
+    function isValidUpload(data) {
+      return data.keys().hasOnly([
+          "userId", "roomId", "title", "description", "fileUrl", "storagePath", "storageProvider", "localFileId",
+          "fileName", "fileType", "mimeType", "size", "tags", "visibility", "shareId", "createdAt", "updatedAt"
+        ])
+        && owns(data.userId)
+        && isValidRoomId(data.roomId)
+        && isRoomMember(data.roomId)
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 120
+        && data.description is string
+        && data.description.size() <= 1000
+        && data.fileUrl is string
+        && data.storagePath is string
+        && data.storageProvider in ["browser", "url", "firebase"]
+        && (data.localFileId == null || data.localFileId is string)
+        && data.fileName is string
+        && data.fileType in [
+          "pdf", "document", "archive", "image", "video", "text", "code", "link", "other"
+        ]
+        && data.mimeType is string
+        && data.size is int
+        && data.size <= 100 * 1024 * 1024
+        && data.tags is list
+        && data.visibility in ["private", "shared"]
+        && data.shareId is string
+        && data.shareId.size() > 0;
     }
 
     function isRequestingRoomAccess() {
@@ -144,15 +193,8 @@ service cloud.firestore {
     }
 
     match /uploads/{uploadId} {
-      allow read: if owns(resource.data.userId) || isSharedUpload();
-      allow create: if owns(request.resource.data.userId)
-        && request.resource.data.title is string
-        && request.resource.data.fileUrl is string
-        && request.resource.data.fileType in [
-          "pdf", "document", "archive", "image", "video", "text", "code", "link", "other"
-        ]
-        && request.resource.data.visibility in ["private", "shared"]
-        && request.resource.data.size <= 100 * 1024 * 1024;
+      allow read: if owns(resource.data.userId) || isSharedUpload() || canReadRoom(resource.data.roomId);
+      allow create: if isValidUpload(request.resource.data);
       allow update, delete: if owns(resource.data.userId);
     }
 
@@ -162,14 +204,14 @@ service cloud.firestore {
     }
 
     match /comments/{commentId} {
-      allow read: if signedIn();
-      allow create: if owns(request.resource.data.userId);
+      allow read: if canReadUpload(resource.data.uploadId);
+      allow create: if owns(request.resource.data.userId) && canReadUpload(request.resource.data.uploadId);
       allow update, delete: if owns(resource.data.userId);
     }
 
     match /chats/{messageId} {
-      allow read: if owns(resource.data.userId);
-      allow create: if owns(request.resource.data.userId);
+      allow read: if owns(resource.data.userId) && canReadRoom(resource.data.roomId);
+      allow create: if owns(request.resource.data.userId) && canReadRoom(request.resource.data.roomId);
       allow update, delete: if false;
     }
 
@@ -207,17 +249,21 @@ service cloud.firestore {
     }
 
     match /codeSnippets/{snippetId} {
-      allow read: if signedIn();
-      allow create: if owns(request.resource.data.userId) && isValidCodeSnippet(request.resource.data);
+      allow read: if canReadRoom(resource.data.roomId);
+      allow create: if owns(request.resource.data.userId)
+        && canReadRoom(request.resource.data.roomId)
+        && isValidCodeSnippet(request.resource.data);
       allow update: if owns(resource.data.userId)
         && request.resource.data.userId == resource.data.userId
+        && request.resource.data.roomId == resource.data.roomId
         && request.resource.data.createdAt == resource.data.createdAt
+        && canReadRoom(resource.data.roomId)
         && isValidCodeSnippet(request.resource.data);
       allow delete: if owns(resource.data.userId);
     }
 
     match /activityLogs/{activityId} {
-      allow read: if owns(resource.data.userId);
+      allow read: if owns(resource.data.userId) || canReadRoom(resource.data.roomId);
       allow create: if owns(request.resource.data.userId);
       allow update, delete: if false;
     }

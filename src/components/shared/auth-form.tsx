@@ -31,7 +31,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 }
 
 function LoginForm() {
-  const { login, loginGoogle, loginGuest, loading, error, user, firebaseReady } = useAuth();
+  const { login, loginGoogle, loading, error, user, firebaseReady } = useAuth();
   const router = useRouter();
   const form = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema), defaultValues: { email: "", password: "" } });
 
@@ -82,11 +82,6 @@ function LoginForm() {
           toast.success("Login Google conectado.");
           router.replace(getAuthRedirectPath());
         }}
-        onGuest={async () => {
-          await loginGuest();
-          toast.success("Sessao convidada criada.");
-          router.replace(getAuthRedirectPath());
-        }}
       />
 
       <Button asChild variant="ghost" className="w-full">
@@ -100,7 +95,7 @@ function LoginForm() {
 }
 
 function RegisterForm() {
-  const { register, loginGoogle, loginGuest, loading, error, user, firebaseReady } = useAuth();
+  const { register, loginGoogle, loading, error, user, firebaseReady } = useAuth();
   const router = useRouter();
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -157,11 +152,6 @@ function RegisterForm() {
           toast.success("Login Google conectado.");
           router.replace(getAuthRedirectPath());
         }}
-        onGuest={async () => {
-          await loginGuest();
-          toast.success("Sessao convidada criada.");
-          router.replace(getAuthRedirectPath());
-        }}
       />
     </AuthFrame>
   );
@@ -211,11 +201,9 @@ function ResetPasswordForm() {
 function AuthAlternatives({
   disabled,
   onGoogle,
-  onGuest,
 }: {
   disabled: boolean;
   onGoogle: () => Promise<void>;
-  onGuest: () => Promise<void>;
 }) {
   return (
     <div className="space-y-3">
@@ -223,13 +211,10 @@ function AuthAlternatives({
         <span className="bg-card px-3">ou continue com</span>
         <span className="absolute left-0 top-1/2 -z-10 h-px w-full bg-border" />
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <Button type="button" variant="outline" disabled={disabled} onClick={() => void onGoogle().catch(showAuthActionError)}>
+      <div>
+        <Button type="button" variant="outline" className="w-full" disabled={disabled} onClick={() => void onGoogle().catch(showAuthActionError)}>
           <Globe className="h-4 w-4" aria-hidden="true" />
           Google
-        </Button>
-        <Button type="button" variant="outline" disabled={disabled} onClick={() => void onGuest().catch(showAuthActionError)}>
-          Convidado
         </Button>
       </div>
     </div>

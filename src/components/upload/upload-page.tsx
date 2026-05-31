@@ -8,9 +8,13 @@ import { UploadDropzone } from "@/components/upload/upload-dropzone";
 import { useAuth } from "@/hooks/use-auth";
 import { useDashboardData } from "@/hooks/use-dashboard-data";
 
-export function UploadPage() {
+type UploadPageProps = {
+  roomId: string;
+};
+
+export function UploadPage({ roomId }: UploadPageProps) {
   const { user, profile } = useAuth();
-  const { uploads, favorites, error } = useDashboardData(user?.uid);
+  const { uploads, favorites, error } = useDashboardData(user?.uid, roomId);
   const favoriteIds = new Set(favorites.map((favorite) => favorite.uploadId));
 
   return (
@@ -24,9 +28,9 @@ export function UploadPage() {
       </section>
 
       {error ? <ErrorState message={error} /> : null}
-      <UploadDropzone userId={user?.uid ?? ""} />
-      <LinkSubmissionForm userId={user?.uid ?? ""} />
-      <RecentUploads userId={user?.uid ?? ""} uploads={uploads} favoriteUploadIds={favoriteIds} />
+      <UploadDropzone userId={user?.uid ?? ""} roomId={roomId} />
+      <LinkSubmissionForm userId={user?.uid ?? ""} roomId={roomId} />
+      <RecentUploads userId={user?.uid ?? ""} roomId={roomId} uploads={uploads} favoriteUploadIds={favoriteIds} />
       <CommentsPanel userId={user?.uid ?? ""} profile={profile} uploads={uploads} />
     </div>
   );

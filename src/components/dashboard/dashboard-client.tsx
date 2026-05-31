@@ -11,9 +11,13 @@ import { useDashboardData } from "@/hooks/use-dashboard-data";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useUiStore } from "@/store/ui-store";
 
-export function DashboardClient() {
+type DashboardClientProps = {
+  roomId: string;
+};
+
+export function DashboardClient({ roomId }: DashboardClientProps) {
   const { user, profile } = useAuth();
-  const { uploads, favorites, activities, stats, loading, error } = useDashboardData(user?.uid);
+  const { uploads, favorites, activities, stats, loading, error } = useDashboardData(user?.uid, roomId);
   const search = useDebouncedValue(useUiStore((state) => state.globalSearch), 180).toLowerCase();
 
   const favoriteIds = new Set(favorites.map((favorite) => favorite.uploadId));
@@ -49,7 +53,7 @@ export function DashboardClient() {
       <StatsGrid stats={stats} />
 
       <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-        <RecentUploads userId={user?.uid ?? ""} uploads={filteredUploads} favoriteUploadIds={favoriteIds} />
+        <RecentUploads userId={user?.uid ?? ""} roomId={roomId} uploads={filteredUploads} favoriteUploadIds={favoriteIds} />
         <div className="space-y-6">
           <FavoritesPanel favorites={favorites} uploads={uploads} />
           <ActivityFeed activities={activities} />

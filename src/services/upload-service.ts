@@ -13,41 +13,108 @@ import {
   where,
   type Unsubscribe,
 } from "firebase/firestore";
+import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collections } from "@/firebase/collections";
-import { getClientFirestore, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
+import { getClientFirestore, getClientStorage, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
 import { sanitizeFileName, sanitizeText } from "@/lib/sanitize";
-import { createLocalFileUrl, deleteLocalFile } from "@/services/local-file-service";
+import { deleteLocalFile } from "@/services/local-file-service";
 import { createActivityLog } from "@/services/activity-service";
-import type { AcademicUpload, CreateUploadInput, FileKind } from "@/types/upload";
+import { normalizeRoomCode } from "@/services/room-service";
+import type { AcademicUpload, CreateUploadInput, FileKind, UploadProgress } from "@/types/upload";
 import { classifyFile } from "@/utils/file";
 import { toDate } from "@/utils/date";
 
 type SaveUploadInput = {
   userId: string;
+  roomId: string;
   file: File;
   metadata: CreateUploadInput;
-  localFileId: string;
+  fileUrl: string;
+  storagePath: string;
 };
 
 type SaveLinkInput = {
   userId: string;
+  roomId: string;
   url: string;
   metadata: CreateUploadInput;
 };
 
+type UploadAcademicFileInput = {
+  userId: string;
+  roomId: string;
+  file: File;
+  onProgress?: (progress: UploadProgress) => void;
+};
+
+function normalizeScopedRoomId(roomId: string) {
+  const normalized = normalizeRoomCode(roomId);
+  if (normalized.length !== 8) throw new Error("Sala invalida para envio.");
+
+  return normalized;
+}
+
+function createStoragePath(userId: string, roomId: string, fileName: string) {
+  const safeFileName = sanitizeFileName(fileName) || "skilldrop-material";
+
+  return `rooms/${normalizeScopedRoomId(roomId)}/uploads/${userId}/${crypto.randomUUID()}-${safeFileName}`;
+}
+
+export async function uploadAcademicFile(input: UploadAcademicFileInput) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
+  const storagePath = createStoragePath(input.userId, input.roomId, input.file.name);
+  const storageRef = ref(getClientStorage(), storagePath);
+  const uploadTask = uploadBytesResumable(storageRef, input.file, {
+    contentType: input.file.type || "application/octet-stream",
+    customMetadata: {
+      roomId: normalizeScopedRoomId(input.roomId),
+      userId: input.userId,
+    },
+  });
+
+  return new Promise<{ fileUrl: string; storagePath: string }>((resolve, reject) => {
+    uploadTask.on(
+      "state_changed",
+      (snapshot) => {
+        const percentage = snapshot.totalBytes
+          ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
+          : 0;
+
+        input.onProgress?.({
+          bytesTransferred: snapshot.bytesTransferred,
+          totalBytes: snapshot.totalBytes,
+          percentage,
+        });
+      },
+      reject,
+      async () => {
+        try {
+          const fileUrl = await getDownloadURL(uploadTask.snapshot.ref);
+          resolve({ fileUrl, storagePath });
+        } catch (error) {
+          reject(error);
+        }
+      },
+    );
+  });
+}
+
 export async function saveUploadMetadata(input: SaveUploadInput) {
   if (!isFirebaseConfigured) throw getFirebaseConfigError();
 
+  const roomId = normalizeScopedRoomId(input.roomId);
   const shareId = crypto.randomUUID();
   const safeFileName = sanitizeFileName(input.file.name);
   const payload = {
     userId: input.userId,
+    roomId,
     title: sanitizeText(input.metadata.title, 120),
     description: sanitizeText(input.metadata.description, 1000),
-    fileUrl: createLocalFileUrl(input.localFileId),
-    storagePath: `indexeddb://${input.localFileId}`,
-    storageProvider: "browser",
-    localFileId: input.localFileId,
+    fileUrl: input.fileUrl,
+    storagePath: input.storagePath,
+    storageProvider: "firebase",
+    localFileId: null,
     fileName: safeFileName,
     fileType: classifyFile(input.file),
     mimeType: input.file.type || "application/octet-stream",
@@ -62,6 +129,7 @@ export async function saveUploadMetadata(input: SaveUploadInput) {
   const uploadRef = await addDoc(collection(getClientFirestore(), collections.uploads), payload);
   await createActivityLog({
     userId: input.userId,
+    roomId,
     type: input.metadata.visibility === "shared" ? "upload_shared" : "upload_created",
     message: `${payload.title} foi enviado.`,
     uploadId: uploadRef.id,
@@ -73,10 +141,12 @@ export async function saveUploadMetadata(input: SaveUploadInput) {
 export async function saveLinkUpload(input: SaveLinkInput) {
   if (!isFirebaseConfigured) throw getFirebaseConfigError();
 
+  const roomId = normalizeScopedRoomId(input.roomId);
   const parsedUrl = new URL(input.url);
   const shareId = crypto.randomUUID();
   const payload = {
     userId: input.userId,
+    roomId,
     title: sanitizeText(input.metadata.title, 120),
     description: sanitizeText(input.metadata.description, 1000),
     fileUrl: parsedUrl.toString(),
@@ -97,6 +167,7 @@ export async function saveLinkUpload(input: SaveLinkInput) {
   const uploadRef = await addDoc(collection(getClientFirestore(), collections.uploads), payload);
   await createActivityLog({
     userId: input.userId,
+    roomId,
     type: input.metadata.visibility === "shared" ? "upload_shared" : "upload_created",
     message: `${payload.title} foi salvo como link.`,
     uploadId: uploadRef.id,
@@ -110,9 +181,38 @@ export async function deleteAcademicUpload(upload: AcademicUpload) {
 
   await deleteDoc(doc(getClientFirestore(), collections.uploads, upload.id));
 
+  if (upload.storageProvider === "firebase" && upload.storagePath) {
+    await deleteObject(ref(getClientStorage(), upload.storagePath)).catch(() => undefined);
+  }
+
   if (upload.localFileId) {
     await deleteLocalFile(upload.localFileId).catch(() => undefined);
   }
+}
+
+export function listenRoomUploads(
+  roomId: string,
+  onData: (uploads: AcademicUpload[]) => void,
+  onError: (error: Error) => void,
+  resultLimit = 80,
+): Unsubscribe {
+  if (!isFirebaseConfigured) {
+    onData([]);
+    return () => undefined;
+  }
+
+  const uploadsQuery = query(
+    collection(getClientFirestore(), collections.uploads),
+    where("roomId", "==", normalizeScopedRoomId(roomId)),
+    orderBy("createdAt", "desc"),
+    limit(resultLimit),
+  );
+
+  return onSnapshot(
+    uploadsQuery,
+    (snapshot) => onData(snapshot.docs.map((item) => mapUpload(item.id, item.data()))),
+    onError,
+  );
 }
 
 export function listenUserUploads(
@@ -166,11 +266,17 @@ export function listenSharedUploadByShareId(
 
 export function mapUpload(id: string, data: Record<string, unknown>): AcademicUpload {
   const fileUrl = String(data.fileUrl);
-  const storageProvider = data.storageProvider === "url" || fileUrl.startsWith("http") ? "url" : "browser";
+  const rawStorageProvider = String(data.storageProvider ?? "");
+  const storageProvider = rawStorageProvider === "firebase"
+    ? "firebase"
+    : rawStorageProvider === "url" || fileUrl.startsWith("http")
+      ? "url"
+      : "browser";
 
   return {
     id,
     userId: String(data.userId),
+    roomId: typeof data.roomId === "string" ? data.roomId : null,
     title: String(data.title),
     description: String(data.description ?? ""),
     fileUrl,

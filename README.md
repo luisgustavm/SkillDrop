@@ -6,8 +6,8 @@ SkillDrop é uma plataforma web SaaS para estudantes criarem salas privadas, env
 
 - Next.js 15 App Router, React, TypeScript e TailwindCSS
 - Componentes no padrão Shadcn/UI, Framer Motion e Lucide Icons
-- Firebase Authentication, Firestore e Hosting
-- Arquivos em IndexedDB local do navegador, sem custo de Firebase Storage
+- Firebase Authentication, Firestore, Storage e Hosting
+- Arquivos no Firebase Storage, com leitura restrita aos membros da sala
 - OpenAI API com streaming em `/api/ai/chat`
 - Monaco Editor, React Hook Form, Zod e Zustand
 - Salas privadas por código ou link, com mensagens e anexos pequenos por sala
@@ -25,18 +25,25 @@ Abra `http://localhost:3000`.
 ## Firebase
 
 1. Crie um projeto no Firebase.
-2. Ative Authentication com Email/Senha, Google e Anonymous.
+2. Ative Authentication com Email/Senha e Google.
 3. Crie Firestore.
-4. Preencha `.env.local` com as credenciais client e admin.
-5. Publique regras e índices:
+4. Ative Firebase Storage.
+5. Preencha `.env.local` com as credenciais client e admin.
+6. Publique regras e índices:
 
 ```bash
-firebase deploy --only firestore:rules,firestore:indexes
+firebase deploy --only firestore:rules,firestore:indexes,storage --project skilldrop-78a68
 ```
 
-## Uploads sem custo
+## Uploads
 
-O SkillDrop não usa Firebase Storage. Os arquivos enviados ficam no IndexedDB do navegador do usuário, e o Firestore armazena somente metadados, tags, comentários, favoritos e links. Isso elimina custo de storage, mas significa que um arquivo local abre apenas no navegador/dispositivo onde foi enviado. Links externos continuam compartilháveis normalmente.
+Os arquivos enviados ficam em `rooms/{roomId}/uploads/{userId}` no Firebase Storage. O Firestore guarda metadados, tags, comentários, favoritos e links. As regras de Storage conferem no Firestore se o usuário é membro da sala antes de permitir leitura, upload ou exclusão.
+
+No Vercel, configure também:
+
+```bash
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=skilldrop-78a68.firebasestorage.app
+```
 
 ## OpenAI
 

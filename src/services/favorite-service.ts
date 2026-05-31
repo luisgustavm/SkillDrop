@@ -21,7 +21,7 @@ function favoriteDocumentId(userId: string, uploadId: string) {
   return `${userId}_${uploadId}`;
 }
 
-export async function setFavorite(userId: string, uploadId: string, enabled: boolean) {
+export async function setFavorite(userId: string, uploadId: string, enabled: boolean, roomId?: string | null) {
   if (!isFirebaseConfigured) throw getFirebaseConfigError();
 
   const db = getClientFirestore();
@@ -39,6 +39,7 @@ export async function setFavorite(userId: string, uploadId: string, enabled: boo
   });
   await createActivityLog({
     userId,
+    roomId,
     type: "favorite_added",
     message: "Um envio foi adicionado aos favoritos.",
     uploadId,

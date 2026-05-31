@@ -19,11 +19,12 @@ import { cn } from "@/lib/utils";
 
 type RecentUploadsProps = {
   userId: string;
+  roomId?: string;
   uploads: AcademicUpload[];
   favoriteUploadIds: Set<string>;
 };
 
-export function RecentUploads({ userId, uploads, favoriteUploadIds }: RecentUploadsProps) {
+export function RecentUploads({ userId, roomId, uploads, favoriteUploadIds }: RecentUploadsProps) {
   const [typeFilter, setTypeFilter] = useState<FileKind | "all">("all");
   const [visibilityFilter, setVisibilityFilter] = useState<"all" | "private" | "shared">("all");
   const filteredUploads = useMemo(
@@ -44,7 +45,7 @@ export function RecentUploads({ userId, uploads, favoriteUploadIds }: RecentUplo
         description="Envie PDFs, códigos, imagens, vídeos ou ZIPs para organizar suas atividades."
         action={
           <Button asChild>
-            <Link href="/uploads">Enviar arquivo</Link>
+            <Link href={roomId ? `/rooms/${encodeURIComponent(roomId)}/uploads` : "/rooms"}>Enviar arquivo</Link>
           </Button>
         }
       />
@@ -120,7 +121,7 @@ export function RecentUploads({ userId, uploads, favoriteUploadIds }: RecentUplo
                   size="icon"
                   title={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
                   onClick={async () => {
-                    await setFavorite(userId, upload.id, !isFavorite);
+                    await setFavorite(userId, upload.id, !isFavorite, upload.roomId);
                     toast.success(isFavorite ? "Removido dos favoritos." : "Adicionado aos favoritos.");
                   }}
                 >

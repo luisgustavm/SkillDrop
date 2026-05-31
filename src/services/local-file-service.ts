@@ -99,7 +99,7 @@ export async function deleteLocalFile(localFileId: string) {
 }
 
 export async function openAcademicUpload(upload: AcademicUpload) {
-  if (upload.storageProvider === "url" || upload.fileType === "link") {
+  if (upload.storageProvider === "url" || upload.storageProvider === "firebase" || upload.fileType === "link") {
     window.open(upload.fileUrl, "_blank", "noopener,noreferrer");
     return;
   }
@@ -131,7 +131,7 @@ function triggerDownload(url: string, fileName: string) {
 }
 
 export async function downloadAcademicUpload(upload: AcademicUpload) {
-  if (upload.storageProvider === "url" || upload.fileType === "link") {
+  if (upload.storageProvider === "url" || upload.storageProvider === "firebase" || upload.fileType === "link") {
     triggerDownload(upload.fileUrl, upload.fileName || upload.title);
     return;
   }

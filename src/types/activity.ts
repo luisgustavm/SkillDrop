@@ -3,6 +3,7 @@ export type ActivityType = "upload_created" | "upload_shared" | "favorite_added"
 export interface ActivityLog {
   id: string;
   userId: string;
+  roomId?: string | null;
   type: ActivityType;
   message: string;
   uploadId?: string;

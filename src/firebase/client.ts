@@ -9,10 +9,12 @@ import {
   type Auth,
 } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
+import { getStorage, type FirebaseStorage } from "firebase/storage";
 import { firebaseClientConfig, isFirebaseConfigured } from "@/lib/env";
 
 let authInstance: Auth | null = null;
 let firestoreInstance: Firestore | null = null;
+let storageInstance: FirebaseStorage | null = null;
 let analyticsInstance: Analytics | null = null;
 let authPersistencePromise: Promise<void> | null = null;
 
@@ -49,6 +51,14 @@ export function getClientFirestore() {
   }
 
   return firestoreInstance;
+}
+
+export function getClientStorage() {
+  if (!storageInstance) {
+    storageInstance = getStorage(getFirebaseClientApp());
+  }
+
+  return storageInstance;
 }
 
 export async function getClientAnalytics() {

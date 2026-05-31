@@ -21,12 +21,13 @@ import { classifyFile, formatBytes } from "@/utils/file";
 
 type UploadDropzoneProps = {
   userId: string;
+  roomId: string;
 };
 
-export function UploadDropzone({ userId }: UploadDropzoneProps) {
+export function UploadDropzone({ userId, roomId }: UploadDropzoneProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const upload = useUpload(userId);
+  const upload = useUpload(userId, roomId);
   const form = useForm<UploadMetadataFormValues>({
     resolver: zodResolver(uploadMetadataSchema),
     defaultValues: {

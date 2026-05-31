@@ -1,0 +1,28 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isValidRoomId(roomId) {
+      return roomId is string && roomId.size() == 8;
+    }
+
+    function isRoomMember(roomId) {
+      return signedIn()
+        && isValidRoomId(roomId)
+        && firestore.exists(/databases/(default)/documents/rooms/$(roomId))
+        && request.auth.uid in firestore.get(/databases/(default)/documents/rooms/$(roomId)).data.memberIds;
+    }
+
+    match /rooms/{roomId}/uploads/{userId}/{fileName=**} {
+      allow read: if isRoomMember(roomId);
+      allow create, update: if isRoomMember(roomId)
+        && request.auth.uid == userId
+        && request.resource.size <= 100 * 1024 * 1024;
+      allow delete: if isRoomMember(roomId) && request.auth.uid == userId;
+    }
+  }
+}

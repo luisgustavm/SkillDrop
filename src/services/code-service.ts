@@ -11,11 +11,13 @@ import {
   query,
   serverTimestamp,
   updateDoc,
+  where,
   type Unsubscribe,
 } from "firebase/firestore";
 import { collections } from "@/firebase/collections";
 import { getClientFirestore, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
 import { sanitizeText } from "@/lib/sanitize";
+import { normalizeRoomCode } from "@/services/room-service";
 import type { CodeLanguage, CodeSnippet, SaveCodeSnippetInput } from "@/types/code";
 import { toDate } from "@/utils/date";
 
@@ -33,13 +35,16 @@ const allowedLanguages = new Set<CodeLanguage>([
 function normalizeCodeInput(input: SaveCodeSnippetInput) {
   const title = sanitizeText(input.title, 120);
   const code = sanitizeText(input.code, 50_000);
+  const roomId = normalizeRoomCode(input.roomId);
 
   if (!title) throw new Error("Coloque um título para salvar o código.");
   if (!code) throw new Error("Escreva um código antes de salvar.");
+  if (roomId.length !== 8) throw new Error("Entre em uma sala para salvar o código.");
   if (!allowedLanguages.has(input.language)) throw new Error("Linguagem inválida.");
 
   return {
     userId: input.userId,
+    roomId,
     authorName: sanitizeText(input.authorName, 80) || "Estudante",
     authorAvatar: input.authorAvatar,
     title,
@@ -81,6 +86,7 @@ export async function deleteCodeSnippet(snippetId: string) {
 }
 
 export function listenCodeSnippets(
+  roomId: string,
   onData: (snippets: CodeSnippet[]) => void,
   onError: (error: Error) => void,
   resultLimit = 80,
@@ -92,6 +98,7 @@ export function listenCodeSnippets(
 
   const snippetsQuery = query(
     collection(getClientFirestore(), collections.codeSnippets),
+    where("roomId", "==", normalizeRoomCode(roomId)),
     orderBy("createdAt", "desc"),
     limit(resultLimit),
   );
@@ -106,6 +113,7 @@ export function listenCodeSnippets(
           return {
             id: item.id,
             userId: String(data.userId),
+            roomId: typeof data.roomId === "string" ? data.roomId : null,
             authorName: String(data.authorName ?? "Estudante"),
             authorAvatar: typeof data.authorAvatar === "string" ? data.authorAvatar : null,
             title: String(data.title ?? "Código sem título"),

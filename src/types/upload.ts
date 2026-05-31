@@ -10,11 +10,12 @@ export type FileKind =
   | "other";
 
 export type UploadVisibility = "private" | "shared";
-export type UploadStorageProvider = "browser" | "url";
+export type UploadStorageProvider = "browser" | "url" | "firebase";
 
 export interface AcademicUpload {
   id: string;
   userId: string;
+  roomId: string | null;
   title: string;
   description: string;
   fileUrl: string;
