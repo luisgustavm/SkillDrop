@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Bot, MessageSquare, Share2, Star, UploadCloud } from "lucide-react";
+import { Activity, BookOpen, Bot, CalendarDays, ClipboardList, MessageSquare, Share2, Star, UploadCloud } from "lucide-react";
 import { EmptyState } from "@/components/shared/empty-state";
 import type { ActivityLog, ActivityType } from "@/types/activity";
 import { formatRelativeDate } from "@/utils/date";
@@ -11,6 +11,9 @@ const iconMap = {
   favorite_added: Star,
   comment_created: MessageSquare,
   ai_message: Bot,
+  subject_created: BookOpen,
+  task_created: ClipboardList,
+  event_created: CalendarDays,
 } satisfies Record<ActivityType, typeof Activity>;
 
 export function ActivityFeed({ activities }: { activities: ActivityLog[] }) {

@@ -79,7 +79,7 @@ service cloud.firestore {
     function isValidRoom(data) {
       return data.keys().hasOnly([
           "code", "name", "ownerId", "ownerName", "memberIds", "memberCount",
-          "memberProfiles",
+          "memberProfiles", "bannedUserIds",
           "pendingRequests", "pendingRequestUserIds",
           "lastMessageText", "lastMessageAuthorName", "lastMessageAt", "createdAt", "updatedAt"
         ])
@@ -94,6 +94,7 @@ service cloud.firestore {
         && data.ownerName.size() <= 80
         && data.memberIds is list
         && (!("memberProfiles" in data) || data.memberProfiles is list)
+        && (!("bannedUserIds" in data) || data.bannedUserIds is list)
         && data.memberCount is int
         && data.memberCount >= 1
         && data.pendingRequests is list
@@ -159,10 +160,10 @@ service cloud.firestore {
     function isOwnerRoomUpdate() {
       return owns(resource.data.ownerId)
         && request.resource.data.code == resource.data.code
-        && request.resource.data.ownerId == resource.data.ownerId
         && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.ownerId in request.resource.data.memberIds
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          "name", "memberProfiles", "pendingRequests", "pendingRequestUserIds", "memberIds", "memberCount", "updatedAt"
+          "name", "ownerId", "ownerName", "memberProfiles", "bannedUserIds", "pendingRequests", "pendingRequestUserIds", "memberIds", "memberCount", "updatedAt"
         ]);
     }
 
@@ -223,6 +224,88 @@ service cloud.firestore {
         && data.content is string
         && data.content.size() > 0
         && data.content.size() <= 1000;
+    }
+
+    function isValidSubjectColor(color) {
+      return color in ["blue", "emerald", "amber", "rose", "violet", "slate"];
+    }
+
+    function isValidEventKind(kind) {
+      return kind in ["class", "exam", "assignment", "meeting", "presentation"];
+    }
+
+    function isValidAcademicBase(data) {
+      return isValidRoomId(data.roomId)
+        && canReadRoom(data.roomId);
+    }
+
+    function isValidRoomSubject(data) {
+      return data.keys().hasOnly(["roomId", "name", "color", "createdBy", "createdAt", "updatedAt"])
+        && isValidAcademicBase(data)
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 80
+        && isValidSubjectColor(data.color);
+    }
+
+    function isValidRoomTask(data) {
+      return data.keys().hasOnly([
+          "roomId", "subjectId", "title", "description", "dueAt", "status", "createdBy", "createdAt", "updatedAt"
+        ])
+        && isValidAcademicBase(data)
+        && (data.subjectId == null || data.subjectId is string)
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 120
+        && data.description is string
+        && data.description.size() <= 1000
+        && data.status in ["open", "done"];
+    }
+
+    function isValidRoomEvent(data) {
+      return data.keys().hasOnly([
+          "roomId", "subjectId", "title", "description", "startsAt", "kind", "createdBy", "createdAt", "updatedAt"
+        ])
+        && isValidAcademicBase(data)
+        && (data.subjectId == null || data.subjectId is string)
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 120
+        && data.description is string
+        && data.description.size() <= 1000
+        && isValidEventKind(data.kind);
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasOnly(["userId", "roomId", "title", "message", "kind", "read", "createdAt"])
+        && canCreateNotification(data)
+        && (data.roomId == null || isValidRoomId(data.roomId))
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 120
+        && data.message is string
+        && data.message.size() <= 500
+        && data.kind in ["room", "material", "task", "message"]
+        && data.read is bool;
+    }
+
+    function canCreateNotification(data) {
+      return signedIn()
+        && data.userId is string
+        && (
+          data.userId == request.auth.uid
+          || (
+            data.roomId != null
+            && isValidRoomId(data.roomId)
+            && (
+              request.auth.uid == get(/databases/$(database)/documents/rooms/$(data.roomId)).data.ownerId
+              || (
+                data.userId == get(/databases/$(database)/documents/rooms/$(data.roomId)).data.ownerId
+                && request.auth.uid in get(/databases/$(database)/documents/rooms/$(data.roomId)).data.pendingRequestUserIds
+              )
+            )
+          )
+        );
     }
 
     match /users/{userId} {
@@ -314,6 +397,39 @@ service cloud.firestore {
         && canReadRoom(resource.data.roomId)
         && isValidCodeSnippet(request.resource.data);
       allow delete: if owns(resource.data.userId);
+    }
+
+    match /roomSubjects/{subjectId} {
+      allow read: if canReadRoom(resource.data.roomId);
+      allow create: if owns(request.resource.data.createdBy) && isValidRoomSubject(request.resource.data);
+      allow update, delete: if owns(resource.data.createdBy) && isValidRoomSubject(request.resource.data);
+    }
+
+    match /roomTasks/{taskId} {
+      allow read: if canReadRoom(resource.data.roomId);
+      allow create: if owns(request.resource.data.createdBy) && isValidRoomTask(request.resource.data);
+      allow update: if canReadRoom(resource.data.roomId)
+        && request.resource.data.roomId == resource.data.roomId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && isValidRoomTask(request.resource.data);
+      allow delete: if owns(resource.data.createdBy);
+    }
+
+    match /roomEvents/{eventId} {
+      allow read: if canReadRoom(resource.data.roomId);
+      allow create: if owns(request.resource.data.createdBy) && isValidRoomEvent(request.resource.data);
+      allow update: if owns(resource.data.createdBy)
+        && request.resource.data.roomId == resource.data.roomId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && isValidRoomEvent(request.resource.data);
+      allow delete: if owns(resource.data.createdBy);
+    }
+
+    match /notifications/{notificationId} {
+      allow read, update, delete: if owns(resource.data.userId);
+      allow create: if isValidNotification(request.resource.data);
     }
 
     match /activityLogs/{activityId} {

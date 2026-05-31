@@ -8,4 +8,8 @@ export const collections = {
   favorites: "favorites",
   comments: "comments",
   activityLogs: "activityLogs",
+  roomSubjects: "roomSubjects",
+  roomTasks: "roomTasks",
+  roomEvents: "roomEvents",
+  notifications: "notifications",
 } as const;

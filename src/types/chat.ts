@@ -40,6 +40,7 @@ export interface PrivateRoom {
   name: string;
   ownerId: string;
   ownerName: string;
+  bannedUserIds: string[];
   memberIds: string[];
   memberProfiles: RoomMemberProfile[];
   memberCount: number;
@@ -55,7 +56,7 @@ export interface RoomMemberProfile {
   userId: string;
   name: string;
   avatar: string | null;
-  role: "admin" | "member";
+  role: "admin" | "moderator" | "member";
   joinedAt: Date | null;
 }
 

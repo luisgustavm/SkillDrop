@@ -23,6 +23,7 @@ import {
 import { collections } from "@/firebase/collections";
 import { getClientFirestore, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
 import { sanitizeText } from "@/lib/sanitize";
+import type { NotificationKind } from "@/types/academic";
 import type {
   GlobalChatAttachment,
   PrivateRoom,
@@ -58,6 +59,37 @@ type RequestJoinRoomResult = {
 type ReviewJoinRequestInput = {
   roomId: string;
   requestUserId: string;
+};
+
+type UpdateRoomMemberRoleInput = {
+  roomId: string;
+  memberUserId: string;
+  role: RoomMemberProfile["role"];
+};
+
+type RemoveRoomMemberInput = {
+  roomId: string;
+  memberUserId: string;
+  ban?: boolean;
+};
+
+type RoomNotificationInput = {
+  userId: string;
+  roomId: string;
+  title: string;
+  message: string;
+  kind: NotificationKind;
+};
+
+type OwnerJoinNotification = {
+  ownerId: string;
+  roomName: string;
+  requesterName: string;
+};
+
+type RequestReviewNotification = {
+  userId: string;
+  roomName: string;
 };
 
 type SendRoomMessageInput = {
@@ -116,6 +148,32 @@ function directMessagesCollection(input: DirectConversationInput) {
   return collection(directThreadDocument(input), "messages");
 }
 
+function notificationsCollection() {
+  return collection(getClientFirestore(), collections.notifications);
+}
+
+async function tryCreateRoomNotification(input: RoomNotificationInput) {
+  const userId = sanitizeText(input.userId, 120);
+  const roomId = normalizeRoomCode(input.roomId);
+  const title = sanitizeText(input.title, 120);
+
+  if (!userId || roomId.length !== ROOM_CODE_LENGTH || !title) return;
+
+  try {
+    await addDoc(notificationsCollection(), {
+      userId,
+      roomId,
+      title,
+      message: sanitizeText(input.message, 500),
+      kind: input.kind,
+      read: false,
+      createdAt: serverTimestamp(),
+    });
+  } catch {
+    // Notificacoes sao auxiliares; a acao principal da sala nao deve falhar por isso.
+  }
+}
+
 async function createUniqueRoomCode() {
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const code = createRoomCode();
@@ -148,6 +206,7 @@ export async function createPrivateRoom(input: CreateRoomInput) {
         joinedAt: Timestamp.now(),
       },
     ],
+    bannedUserIds: [],
     memberIds: [input.userId],
     memberCount: 1,
     pendingRequests: [],
@@ -178,6 +237,7 @@ export async function requestJoinPrivateRoom(input: RequestJoinRoomInput): Promi
   }
 
   let status: "already-member" | "pending" | "created" = "created";
+  const ownerNotifications: OwnerJoinNotification[] = [];
 
   await runTransaction(getClientFirestore(), async (transaction) => {
     const roomRef = roomDocument(code);
@@ -188,10 +248,18 @@ export async function requestJoinPrivateRoom(input: RequestJoinRoomInput): Promi
     }
 
     const data = snapshot.data();
+    const ownerId = String(data.ownerId ?? "");
+    const roomName = sanitizeText(String(data.name ?? "Sala"), 80) || "Sala";
+    const requesterName = sanitizeText(input.userName, 80) || "Estudante";
     const memberIds = Array.isArray(data.memberIds) ? data.memberIds.map(String) : [];
+    const bannedUserIds = Array.isArray(data.bannedUserIds) ? data.bannedUserIds.map(String) : [];
     const pendingRequests = Array.isArray(data.pendingRequests)
       ? data.pendingRequests.map((item) => item as Record<string, unknown>)
       : [];
+
+    if (bannedUserIds.includes(input.userId)) {
+      throw new Error("Sua entrada nesta sala foi bloqueada pelo admin.");
+    }
 
     if (memberIds.includes(input.userId)) {
       status = "already-member";
@@ -206,14 +274,28 @@ export async function requestJoinPrivateRoom(input: RequestJoinRoomInput): Promi
     transaction.update(roomRef, {
       pendingRequests: arrayUnion({
         userId: input.userId,
-        name: sanitizeText(input.userName, 80) || "Estudante",
+        name: requesterName,
         avatar: input.userAvatar,
         requestedAt: Timestamp.now(),
       }),
       pendingRequestUserIds: arrayUnion(input.userId),
       updatedAt: serverTimestamp(),
     });
+
+    ownerNotifications.push({ ownerId, roomName, requesterName });
   });
+
+  const notificationToOwner = ownerNotifications[0];
+
+  if (notificationToOwner) {
+    await tryCreateRoomNotification({
+      userId: notificationToOwner.ownerId,
+      roomId: code,
+      title: "Novo pedido de entrada",
+      message: `${notificationToOwner.requesterName} quer entrar na sala ${notificationToOwner.roomName}.`,
+      kind: "room",
+    });
+  }
 
   return { code, status };
 }
@@ -230,7 +312,127 @@ export async function rejectRoomJoinRequest(input: ReviewJoinRequestInput) {
   await reviewRoomJoinRequest(input, "reject");
 }
 
+export async function updateRoomMemberRole(input: UpdateRoomMemberRoleInput) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
+  let roomName = "Sala";
+
+  await runTransaction(getClientFirestore(), async (transaction) => {
+    const roomRef = roomDocument(input.roomId);
+    const snapshot = await transaction.get(roomRef);
+
+    if (!snapshot.exists()) throw new Error("Sala nao encontrada.");
+
+    const data = snapshot.data();
+    const ownerId = String(data.ownerId ?? "");
+    roomName = sanitizeText(String(data.name ?? "Sala"), 80) || "Sala";
+
+    if (input.memberUserId === ownerId) {
+      throw new Error("O admin principal ja possui permissao maxima.");
+    }
+
+    const memberProfiles = Array.isArray(data.memberProfiles)
+      ? data.memberProfiles.map((item) => item as Record<string, unknown>)
+      : [];
+    const nextProfiles = memberProfiles.map((member) =>
+      member.userId === input.memberUserId ? { ...member, role: input.role } : member,
+    );
+
+    transaction.update(roomRef, {
+      memberProfiles: nextProfiles,
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  await tryCreateRoomNotification({
+    userId: input.memberUserId,
+    roomId: input.roomId,
+    title: input.role === "moderator" ? "Voce virou moderador" : "Permissao atualizada",
+    message: input.role === "moderator"
+      ? `Agora voce pode ajudar na moderacao da sala ${roomName}.`
+      : `Sua permissao na sala ${roomName} foi atualizada.`,
+    kind: "room",
+  });
+}
+
+export async function transferRoomOwnership(input: { roomId: string; nextOwner: RoomMemberProfile }) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
+  await runTransaction(getClientFirestore(), async (transaction) => {
+    const roomRef = roomDocument(input.roomId);
+    const snapshot = await transaction.get(roomRef);
+
+    if (!snapshot.exists()) throw new Error("Sala nao encontrada.");
+
+    const data = snapshot.data();
+    const memberIds = Array.isArray(data.memberIds) ? data.memberIds.map(String) : [];
+
+    if (!memberIds.includes(input.nextOwner.userId)) {
+      throw new Error("Escolha um integrante aprovado.");
+    }
+
+    const memberProfiles = Array.isArray(data.memberProfiles)
+      ? data.memberProfiles.map((item) => item as Record<string, unknown>)
+      : [];
+    const nextProfiles = memberProfiles.map((member) => ({
+      ...member,
+      role: member.userId === input.nextOwner.userId ? "admin" : member.role,
+    }));
+
+    transaction.update(roomRef, {
+      ownerId: input.nextOwner.userId,
+      ownerName: sanitizeText(input.nextOwner.name, 80) || "Estudante",
+      memberProfiles: nextProfiles,
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+export async function removeRoomMember(input: RemoveRoomMemberInput) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
+  let roomName = "Sala";
+
+  await runTransaction(getClientFirestore(), async (transaction) => {
+    const roomRef = roomDocument(input.roomId);
+    const snapshot = await transaction.get(roomRef);
+
+    if (!snapshot.exists()) throw new Error("Sala nao encontrada.");
+
+    const data = snapshot.data();
+    roomName = sanitizeText(String(data.name ?? "Sala"), 80) || "Sala";
+    const ownerId = String(data.ownerId ?? "");
+    const memberIds = Array.isArray(data.memberIds) ? data.memberIds.map(String) : [];
+    const bannedUserIds = Array.isArray(data.bannedUserIds) ? data.bannedUserIds.map(String) : [];
+    const memberProfiles = Array.isArray(data.memberProfiles)
+      ? data.memberProfiles.map((item) => item as Record<string, unknown>)
+      : [];
+
+    if (input.memberUserId === ownerId) {
+      throw new Error("Transfira a administracao antes de remover o admin principal.");
+    }
+
+    transaction.update(roomRef, {
+      memberIds: memberIds.filter((userId) => userId !== input.memberUserId),
+      memberProfiles: memberProfiles.filter((member) => member.userId !== input.memberUserId),
+      memberCount: Math.max(1, memberIds.filter((userId) => userId !== input.memberUserId).length),
+      ...(input.ban ? { bannedUserIds: Array.from(new Set([...bannedUserIds, input.memberUserId])) } : {}),
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  await tryCreateRoomNotification({
+    userId: input.memberUserId,
+    roomId: input.roomId,
+    title: input.ban ? "Acesso bloqueado" : "Voce foi removido",
+    message: input.ban ? `Seu acesso a sala ${roomName} foi bloqueado.` : `Voce saiu da sala ${roomName}.`,
+    kind: "room",
+  });
+}
+
 async function reviewRoomJoinRequest(input: ReviewJoinRequestInput, action: "approve" | "reject") {
+  const notifications: RequestReviewNotification[] = [];
+
   await runTransaction(getClientFirestore(), async (transaction) => {
     const roomRef = roomDocument(input.roomId);
     const snapshot = await transaction.get(roomRef);
@@ -240,6 +442,7 @@ async function reviewRoomJoinRequest(input: ReviewJoinRequestInput, action: "app
     }
 
     const data = snapshot.data();
+    const roomName = sanitizeText(String(data.name ?? "Sala"), 80) || "Sala";
     const pendingRequests = Array.isArray(data.pendingRequests)
       ? data.pendingRequests.map((item) => item as Record<string, unknown>)
       : [];
@@ -249,6 +452,8 @@ async function reviewRoomJoinRequest(input: ReviewJoinRequestInput, action: "app
     const request = pendingRequests.find((item) => item.userId === input.requestUserId);
 
     if (!request) return;
+
+    notifications.push({ userId: input.requestUserId, roomName });
 
     const nextPendingRequests = pendingRequests.filter((item) => item.userId !== input.requestUserId);
     const nextPendingRequestUserIds = pendingRequestUserIds.filter((userId) => userId !== input.requestUserId);
@@ -271,6 +476,20 @@ async function reviewRoomJoinRequest(input: ReviewJoinRequestInput, action: "app
       updatedAt: serverTimestamp(),
     });
   });
+
+  const notificationToRequester = notifications[0];
+
+  if (notificationToRequester) {
+    await tryCreateRoomNotification({
+      userId: notificationToRequester.userId,
+      roomId: input.roomId,
+      title: action === "approve" ? "Entrada aprovada" : "Pedido recusado",
+      message: action === "approve"
+        ? `Voce ja pode entrar na sala ${notificationToRequester.roomName}.`
+        : `Seu pedido para entrar na sala ${notificationToRequester.roomName} foi recusado.`,
+      kind: "room",
+    });
+  }
 }
 
 export function listenRoomDirectMessages(
@@ -362,6 +581,32 @@ export function listenUserRooms(
   );
 }
 
+export function listenRoomAccess(
+  roomId: string,
+  userId: string,
+  onData: (hasAccess: boolean) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  if (!isFirebaseConfigured) {
+    onData(false);
+    return () => undefined;
+  }
+
+  return onSnapshot(
+    roomDocument(roomId),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        onData(false);
+        return;
+      }
+
+      const memberIds = Array.isArray(snapshot.data().memberIds) ? snapshot.data().memberIds.map(String) : [];
+      onData(memberIds.includes(userId));
+    },
+    onError,
+  );
+}
+
 export function listenRoomMessages(
   roomId: string,
   onData: (messages: RoomMessage[]) => void,
@@ -435,6 +680,7 @@ function mapRoom(id: string, data: Record<string, unknown>): PrivateRoom {
     name: String(data.name ?? "Sala de estudos"),
     ownerId,
     ownerName,
+    bannedUserIds: Array.isArray(data.bannedUserIds) ? data.bannedUserIds.map(String) : [],
     memberIds,
     memberProfiles: mapMemberProfiles(data.memberProfiles, memberIds, ownerId, ownerName),
     memberCount: Number(data.memberCount ?? 1),
@@ -487,7 +733,7 @@ function mapMemberProfile(data: unknown): RoomMemberProfile {
     userId: String(member.userId ?? ""),
     name: String(member.name ?? "Integrante"),
     avatar: typeof member.avatar === "string" ? member.avatar : null,
-    role: member.role === "admin" ? "admin" : "member",
+    role: member.role === "admin" || member.role === "moderator" ? member.role : "member",
     joinedAt: toDate(member.joinedAt),
   };
 }

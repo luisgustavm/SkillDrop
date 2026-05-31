@@ -63,7 +63,7 @@ export function UploadDropzone({ userId, roomId }: UploadDropzoneProps) {
   });
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-6 xl:grid-cols-[1fr_420px]">
+    <form onSubmit={onSubmit} className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px] 2xl:grid-cols-[minmax(0,1fr)_520px]">
       <section className="space-y-4">
         <div
           className={cn(

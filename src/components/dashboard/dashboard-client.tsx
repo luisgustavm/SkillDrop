@@ -1,6 +1,7 @@
 "use client";
 
 import { ErrorState } from "@/components/shared/error-state";
+import { AcademicHub } from "@/components/dashboard/academic-hub";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import { FavoritesPanel } from "@/components/dashboard/favorites-panel";
@@ -52,7 +53,9 @@ export function DashboardClient({ roomId }: DashboardClientProps) {
 
       <StatsGrid stats={stats} />
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+      <AcademicHub roomId={roomId} />
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px] 2xl:grid-cols-[minmax(0,1fr)_480px]">
         <RecentUploads userId={user?.uid ?? ""} roomId={roomId} uploads={filteredUploads} favoriteUploadIds={favoriteIds} />
         <div className="space-y-6">
           <FavoritesPanel favorites={favorites} uploads={uploads} />

@@ -1,14 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { LogOut, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { APP_NAME } from "@/lib/constants";
 import { useAuth } from "@/hooks/use-auth";
+import { useUiStore } from "@/store/ui-store";
 
 export function RoomsLobbyShell({ children }: { children: React.ReactNode }) {
   const { profile, logout } = useAuth();
+  const globalSearch = useUiStore((state) => state.globalSearch);
+  const setGlobalSearch = useUiStore((state) => state.setGlobalSearch);
 
   return (
     <main className="min-h-screen bg-background">
@@ -24,6 +28,16 @@ export function RoomsLobbyShell({ children }: { children: React.ReactNode }) {
             </div>
           </Link>
 
+          <div className="relative hidden w-full max-w-md md:block">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Input
+              value={globalSearch}
+              onChange={(event) => setGlobalSearch(event.target.value)}
+              placeholder="Buscar salas"
+              className="pl-9"
+            />
+          </div>
+
           <div className="ml-auto flex items-center gap-3">
             <div className="hidden items-center gap-2 sm:flex">
               <UserAvatar src={profile?.avatar} name={profile?.name} className="h-8 w-8" />
@@ -36,6 +50,18 @@ export function RoomsLobbyShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
+
+      <div className="border-b px-4 py-3 md:hidden">
+        <div className="relative mx-auto max-w-7xl">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input
+            value={globalSearch}
+            onChange={(event) => setGlobalSearch(event.target.value)}
+            placeholder="Buscar salas"
+            className="pl-9"
+          />
+        </div>
+      </div>
 
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</div>
     </main>

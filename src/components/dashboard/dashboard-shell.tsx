@@ -21,10 +21,12 @@ import { useTheme } from "next-themes";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NotificationButton } from "@/components/dashboard/notification-button";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { APP_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { listenRoomAccess, normalizeRoomCode } from "@/services/room-service";
 import { useUiStore } from "@/store/ui-store";
 
 const lobbyNavigation = [{ href: "/rooms", label: "Salas privadas", icon: LockKeyhole }];
@@ -90,6 +92,33 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
     return () => globalThis.clearTimeout(timeoutId);
   }, [navigation, router]);
+
+  useEffect(() => {
+    if (!activeRoomId || !profile?.uid) return;
+
+    const normalizedRoomId = normalizeRoomCode(activeRoomId);
+    if (normalizedRoomId.length !== 8) {
+      router.replace("/rooms");
+      return;
+    }
+
+    return listenRoomAccess(
+      normalizedRoomId,
+      profile.uid,
+      (hasAccess) => {
+        if (!hasAccess) {
+          setGlobalSearch("");
+          setSidebarOpen(false);
+          router.replace("/rooms");
+        }
+      },
+      () => {
+        setGlobalSearch("");
+        setSidebarOpen(false);
+        router.replace("/rooms");
+      },
+    );
+  }, [activeRoomId, profile?.uid, router, setGlobalSearch, setSidebarOpen]);
 
   const navigate = (href: string) => {
     router.prefetch(href);
@@ -205,7 +234,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <p className="text-xs text-muted-foreground">SkillDrop</p>
               <h1 className="text-lg font-semibold leading-tight">{pageTitle(pathname, navigation)}</h1>
             </div>
-            <div className="relative ml-auto w-full max-w-xl">
+            <div className="relative ml-auto min-w-0 w-full max-w-xl">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <Input
                 value={globalSearch}
@@ -224,11 +253,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <Sun className="h-4 w-4 rotate-0 scale-100 transition dark:-rotate-90 dark:scale-0" aria-hidden="true" />
               <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition dark:rotate-0 dark:scale-100" aria-hidden="true" />
             </Button>
+            <NotificationButton />
           </div>
           <div className={cn("h-0.5 bg-primary/70 opacity-0 transition-opacity", routeLoading && "opacity-100")} />
         </header>
 
-        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="mx-auto w-full max-w-[160rem] px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">{children}</main>
       </div>
     </div>
   );

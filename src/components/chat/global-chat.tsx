@@ -17,6 +17,7 @@ import {
   MessagesSquare,
   Paperclip,
   Plus,
+  Search,
   Send,
   ShieldCheck,
   UserCheck,
@@ -36,6 +37,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { useAuth } from "@/hooks/use-auth";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { sanitizeFileName } from "@/lib/sanitize";
 import { cn } from "@/lib/utils";
 import {
@@ -47,11 +49,15 @@ import {
   listenUserRooms,
   normalizeRoomCode,
   rejectRoomJoinRequest,
+  removeRoomMember,
   requestJoinPrivateRoom,
   sendRoomDirectMessage,
   sendRoomMessage,
+  transferRoomOwnership,
+  updateRoomMemberRole,
 } from "@/services/room-service";
 import { createGlobalChatAttachment, MAX_GLOBAL_CHAT_ATTACHMENT_BYTES } from "@/services/global-chat-service";
+import { useUiStore } from "@/store/ui-store";
 import type { GlobalChatAttachment, PrivateRoom, RoomDirectMessage, RoomMemberProfile, RoomMessage } from "@/types/chat";
 import { formatRelativeDate } from "@/utils/date";
 import { formatBytes } from "@/utils/file";
@@ -86,6 +92,7 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null);
+  const [managingMemberId, setManagingMemberId] = useState<string | null>(null);
   const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sendingPrivate, setSendingPrivate] = useState(false);
@@ -93,6 +100,7 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
   const endRef = useRef<HTMLDivElement | null>(null);
   const privateEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const search = useDebouncedValue(useUiStore((state) => state.globalSearch), 180).trim().toLowerCase();
 
   const activeRoom = useMemo(
     () => rooms.find((room) => room.id === activeRoomId) ?? null,
@@ -102,7 +110,36 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
   const activeRoomOwner = Boolean(activeRoom && user?.uid === activeRoom.ownerId);
   const activeInviteUrl = activeRoom && origin ? `${origin}/rooms?room=${activeRoom.code}` : "";
   const roomUnavailable = Boolean(normalizedInitialRoomId && !loadingRooms && !activeRoom);
-  const roomMembers = activeRoom?.memberProfiles ?? [];
+  const roomMembers = useMemo(() => activeRoom?.memberProfiles ?? [], [activeRoom?.memberProfiles]);
+  const filteredRooms = useMemo(() => {
+    if (!search) return rooms;
+
+    return rooms.filter((room) =>
+      [
+        room.name,
+        room.code,
+        room.ownerName,
+        room.lastMessageText,
+        room.lastMessageAuthorName,
+        ...room.memberProfiles.map((member) => member.name),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(search),
+    );
+  }, [rooms, search]);
+  const filteredMessages = useMemo(() => {
+    if (!search) return messages;
+
+    return messages.filter((message) =>
+      [message.authorName, message.content, message.attachment?.name ?? ""].join(" ").toLowerCase().includes(search),
+    );
+  }, [messages, search]);
+  const filteredRoomMembers = useMemo(() => {
+    if (!search) return roomMembers;
+
+    return roomMembers.filter((member) => [member.name, member.role].join(" ").toLowerCase().includes(search));
+  }, [roomMembers, search]);
   const selectRoom = useCallback(
     (roomId: string) => {
       if (lobbyOnly) {
@@ -343,6 +380,60 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
     }
   };
 
+  const manageMemberRole = async (member: RoomMemberProfile, role: RoomMemberProfile["role"]) => {
+    if (!activeRoom || !activeRoomOwner) return;
+
+    setManagingMemberId(member.userId);
+    setError(null);
+
+    try {
+      await updateRoomMemberRole({ roomId: activeRoom.id, memberUserId: member.userId, role });
+      toast.success("Permissao atualizada.");
+    } catch (roleError) {
+      const message = roleError instanceof Error ? roleError.message : "Nao foi possivel atualizar a permissao.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setManagingMemberId(null);
+    }
+  };
+
+  const makeRoomOwner = async (member: RoomMemberProfile) => {
+    if (!activeRoom || !activeRoomOwner) return;
+
+    setManagingMemberId(member.userId);
+    setError(null);
+
+    try {
+      await transferRoomOwnership({ roomId: activeRoom.id, nextOwner: member });
+      toast.success("Administracao transferida.");
+    } catch (transferError) {
+      const message = transferError instanceof Error ? transferError.message : "Nao foi possivel transferir a administracao.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setManagingMemberId(null);
+    }
+  };
+
+  const removeMember = async (member: RoomMemberProfile, ban = false) => {
+    if (!activeRoom || !activeRoomOwner) return;
+
+    setManagingMemberId(member.userId);
+    setError(null);
+
+    try {
+      await removeRoomMember({ roomId: activeRoom.id, memberUserId: member.userId, ban });
+      toast.success(ban ? "Integrante banido da sala." : "Integrante removido.");
+    } catch (removeError) {
+      const message = removeError instanceof Error ? removeError.message : "Nao foi possivel remover o integrante.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setManagingMemberId(null);
+    }
+  };
+
   const submitPrivateMessage = async () => {
     const trimmedContent = privateContent.trim();
     if (!trimmedContent || !user || !activeRoom || !selectedPrivateMember) return;
@@ -436,7 +527,7 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-medium">Minhas salas</p>
-            <Badge variant="muted">{rooms.length}</Badge>
+            <Badge variant="muted">{search ? `${filteredRooms.length}/${rooms.length}` : rooms.length}</Badge>
           </div>
 
           <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
@@ -449,7 +540,15 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
                 className="min-h-40"
               />
             ) : null}
-            {rooms.map((room) => (
+            {!loadingRooms && rooms.length > 0 && !filteredRooms.length ? (
+              <EmptyState
+                icon={Search}
+                title="Nenhuma sala encontrada"
+                description="Tente buscar pelo nome, codigo, integrante ou ultima mensagem."
+                className="min-h-40"
+              />
+            ) : null}
+            {filteredRooms.map((room) => (
               <article
                 key={room.id}
                 className={cn(
@@ -525,7 +624,14 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
                   description="Compartilhe o código ou o link da sala para começar a conversa."
                 />
               ) : null}
-              {messages.map((message) => (
+              {!loadingMessages && messages.length > 0 && !filteredMessages.length ? (
+                <EmptyState
+                  icon={Search}
+                  title="Nenhuma mensagem encontrada"
+                  description="Ajuste a busca para ver outras mensagens desta sala."
+                />
+              ) : null}
+              {filteredMessages.map((message) => (
                 <RoomMessageBubble key={message.id} message={message} mine={message.userId === user?.uid} />
               ))}
               <div ref={endRef} />
@@ -731,12 +837,14 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
                 <h3 className="text-sm font-semibold">Integrantes</h3>
                 <p className="mt-1 text-xs text-muted-foreground">Admin e participantes aprovados.</p>
               </div>
-              <Badge variant="muted">{roomMembers.length}</Badge>
+              <Badge variant="muted">{search ? `${filteredRoomMembers.length}/${roomMembers.length}` : roomMembers.length}</Badge>
             </div>
             <div className="space-y-2">
-              {roomMembers.map((member) => {
+              {filteredRoomMembers.map((member) => {
                 const mine = member.userId === user?.uid;
                 const admin = member.role === "admin";
+                const moderator = member.role === "moderator";
+                const manageable = activeRoomOwner && !mine && member.userId !== activeRoom.ownerId;
 
                 return (
                   <div key={member.userId} className="rounded-md border bg-card p-3">
@@ -751,8 +859,11 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
                               Admin
                             </Badge>
                           ) : null}
+                          {moderator ? <Badge variant="muted">Moderador</Badge> : null}
                         </div>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{admin ? "Administrador da sala" : "Integrante"}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {admin ? "Administrador da sala" : moderator ? "Pode ajudar na moderacao" : "Integrante"}
+                        </p>
                       </div>
                     </div>
                     {!mine ? (
@@ -770,6 +881,46 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
                         <MessageCircle className="h-4 w-4" aria-hidden="true" />
                         Mensagem privada
                       </Button>
+                    ) : null}
+                    {manageable ? (
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={managingMemberId === member.userId}
+                          onClick={() => void manageMemberRole(member, moderator ? "member" : "moderator")}
+                        >
+                          {moderator ? "Remover mod" : "Moderador"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={managingMemberId === member.userId}
+                          onClick={() => void makeRoomOwner(member)}
+                        >
+                          Virar admin
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={managingMemberId === member.userId}
+                          onClick={() => void removeMember(member)}
+                        >
+                          Remover
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          disabled={managingMemberId === member.userId}
+                          onClick={() => void removeMember(member, true)}
+                        >
+                          Banir
+                        </Button>
+                      </div>
                     ) : null}
                   </div>
                 );

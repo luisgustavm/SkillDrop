@@ -11,8 +11,10 @@ import { QrShare } from "@/components/shared/qr-share";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { useDashboardData } from "@/hooks/use-dashboard-data";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { AcademicUpload } from "@/types/upload";
 import { cn } from "@/lib/utils";
+import { useUiStore } from "@/store/ui-store";
 
 type SharedCenterProps = {
   roomId: string;
@@ -21,7 +23,18 @@ type SharedCenterProps = {
 export function SharedCenter({ roomId }: SharedCenterProps) {
   const { user } = useAuth();
   const { uploads } = useDashboardData(user?.uid, roomId);
-  const sharedUploads = uploads.filter((upload) => upload.visibility === "shared");
+  const search = useDebouncedValue(useUiStore((state) => state.globalSearch), 180).trim().toLowerCase();
+  const sharedUploads = useMemo(() => uploads.filter((upload) => upload.visibility === "shared"), [uploads]);
+  const filteredSharedUploads = useMemo(() => {
+    if (!search) return sharedUploads;
+
+    return sharedUploads.filter((upload) =>
+      [upload.title, upload.description, upload.fileName, upload.fileType, ...upload.tags]
+        .join(" ")
+        .toLowerCase()
+        .includes(search),
+    );
+  }, [search, sharedUploads]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [origin, setOrigin] = useState("");
 
@@ -30,12 +43,15 @@ export function SharedCenter({ roomId }: SharedCenterProps) {
   }, []);
 
   useEffect(() => {
-    if (!selectedId && sharedUploads[0]) setSelectedId(sharedUploads[0].id);
-  }, [selectedId, sharedUploads]);
+    if (!selectedId && filteredSharedUploads[0]) setSelectedId(filteredSharedUploads[0].id);
+    if (selectedId && !filteredSharedUploads.some((upload) => upload.id === selectedId)) {
+      setSelectedId(filteredSharedUploads[0]?.id ?? null);
+    }
+  }, [filteredSharedUploads, selectedId]);
 
   const selectedUpload = useMemo<AcademicUpload | null>(
-    () => sharedUploads.find((upload) => upload.id === selectedId) ?? sharedUploads[0] ?? null,
-    [selectedId, sharedUploads],
+    () => filteredSharedUploads.find((upload) => upload.id === selectedId) ?? filteredSharedUploads[0] ?? null,
+    [filteredSharedUploads, selectedId],
   );
 
   if (!sharedUploads.length) {
@@ -48,6 +64,16 @@ export function SharedCenter({ roomId }: SharedCenterProps) {
     );
   }
 
+  if (!filteredSharedUploads.length) {
+    return (
+      <EmptyState
+        icon={Share2}
+        title="Nenhum compartilhamento encontrado"
+        description="Ajuste a busca para encontrar outro material compartilhado."
+      />
+    );
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
       <section className="rounded-lg border bg-card">
@@ -56,7 +82,7 @@ export function SharedCenter({ roomId }: SharedCenterProps) {
           <p className="mt-1 text-sm text-muted-foreground">Links e QR Codes para apresentar ou revisar materiais compartilháveis.</p>
         </div>
         <div className="divide-y">
-          {sharedUploads.map((upload) => (
+          {filteredSharedUploads.map((upload) => (
             <button
               key={upload.id}
               type="button"
