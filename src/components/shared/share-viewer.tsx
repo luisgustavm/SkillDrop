@@ -63,6 +63,10 @@ export function ShareViewer({ shareId }: { shareId: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-normal">{upload.title}</h1>
             <Badge>compartilhado</Badge>
+            {upload.storageProvider === "browser" ? <Badge variant="muted">arquivo local</Badge> : null}
+            {upload.storageProvider === "inline" || upload.storageProvider === "blob" ? (
+              <Badge variant="secondary">download ativo</Badge>
+            ) : null}
           </div>
           <p className="mt-2 text-sm text-muted-foreground">{upload.description || upload.fileName}</p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -81,7 +85,7 @@ export function ShareViewer({ shareId }: { shareId: string }) {
       </div>
       {upload.storageProvider === "browser" ? (
         <p className="mt-4 rounded-md border bg-muted/60 p-3 text-sm text-muted-foreground">
-          Este material está disponível no dispositivo de envio. Para acesso em outros dispositivos, prefira compartilhar links externos.
+          Este e um material antigo salvo apenas no navegador de envio. Para abrir em qualquer dispositivo, envie novamente como compartilhavel ate 640 KB ou salve um link externo.
         </p>
       ) : null}
       {shareUrl ? <div className="mt-6"><QrShare url={shareUrl} /></div> : null}

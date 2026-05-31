@@ -25,6 +25,7 @@ type AuthContextValue = {
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   getIdToken: () => Promise<string | null>;
+  refreshProfile: () => Promise<void>;
 };
 
 const SESSION_COOKIE_NAME = "skilldrop_session";
@@ -65,6 +66,9 @@ function buildFallbackProfile(currentUser: User, displayName?: string): SkillDro
     avatar: currentUser.photoURL,
     provider,
     isAnonymous: currentUser.isAnonymous,
+    accountStatus: "active",
+    deactivatedAt: null,
+    deletedAt: null,
     createdAt: null,
     updatedAt: null,
   };
@@ -86,6 +90,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Firestore can be unavailable while rules/indexes are being configured.
     }
   }, []);
+
+  const refreshProfile = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const { getUserProfile } = await import("@/services/user-service");
+      const loadedProfile = await getUserProfile(user.uid);
+      setProfile(loadedProfile ?? buildFallbackProfile(user));
+    } catch (profileError) {
+      setError(getFirebaseErrorMessage(profileError));
+    }
+  }, [user]);
 
   const syncTokenCookieInBackground = useCallback(async (currentUser: User) => {
     try {
@@ -186,7 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       error,
       login: (email, password) => runAuthAction(() => loginWithEmail(email, password)),
       register: (name, email, password) => runAuthAction(() => registerWithEmail(name, email, password), name),
-      loginGoogle: () => runAuthAction(loginWithGoogle),
+      loginGoogle: () => runVoidAuthAction(loginWithGoogle),
       resetPassword: (email) => runVoidAuthAction(() => recoverPassword(email)),
       logout: () =>
         runVoidAuthAction(async () => {
@@ -194,8 +210,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           applySession(null);
         }),
       getIdToken: () => user?.getIdToken() ?? Promise.resolve(null),
+      refreshProfile,
     }),
-    [applySession, error, loading, profile, runAuthAction, runVoidAuthAction, user],
+    [applySession, error, loading, profile, refreshProfile, runAuthAction, runVoidAuthAction, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

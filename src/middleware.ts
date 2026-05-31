@@ -38,6 +38,8 @@ export const config = {
     "/rooms/:path*",
     "/global-chat/:path*",
     "/shared/:path*",
+    "/profile",
+    "/profile/:path*",
     "/login",
     "/register",
     "/reset-password",

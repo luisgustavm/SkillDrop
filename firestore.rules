@@ -79,6 +79,7 @@ service cloud.firestore {
     function isValidRoom(data) {
       return data.keys().hasOnly([
           "code", "name", "ownerId", "ownerName", "memberIds", "memberCount",
+          "memberProfiles",
           "pendingRequests", "pendingRequestUserIds",
           "lastMessageText", "lastMessageAuthorName", "lastMessageAt", "createdAt", "updatedAt"
         ])
@@ -92,6 +93,7 @@ service cloud.firestore {
         && data.ownerName.size() > 0
         && data.ownerName.size() <= 80
         && data.memberIds is list
+        && (!("memberProfiles" in data) || data.memberProfiles is list)
         && data.memberCount is int
         && data.memberCount >= 1
         && data.pendingRequests is list
@@ -110,7 +112,7 @@ service cloud.firestore {
 
     function isValidUpload(data) {
       return data.keys().hasOnly([
-          "userId", "roomId", "title", "description", "fileUrl", "storagePath", "storageProvider", "localFileId",
+          "userId", "roomId", "title", "description", "fileUrl", "downloadUrl", "storagePath", "storageProvider", "localFileId",
           "fileName", "fileType", "mimeType", "size", "tags", "visibility", "shareId", "createdAt", "updatedAt"
         ])
         && owns(data.userId)
@@ -122,8 +124,11 @@ service cloud.firestore {
         && data.description is string
         && data.description.size() <= 1000
         && data.fileUrl is string
+        && data.fileUrl.size() > 0
+        && data.fileUrl.size() <= 900000
+        && (data.downloadUrl == null || (data.downloadUrl is string && data.downloadUrl.size() <= 2000))
         && data.storagePath is string
-        && data.storageProvider in ["browser", "url", "firebase"]
+        && data.storageProvider in ["blob", "browser", "inline", "url"]
         && (data.localFileId == null || data.localFileId is string)
         && data.fileName is string
         && data.fileType in [
@@ -157,7 +162,7 @@ service cloud.firestore {
         && request.resource.data.ownerId == resource.data.ownerId
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          "name", "pendingRequests", "pendingRequestUserIds", "memberIds", "memberCount", "updatedAt"
+          "name", "memberProfiles", "pendingRequests", "pendingRequestUserIds", "memberIds", "memberCount", "updatedAt"
         ]);
     }
 
@@ -185,6 +190,39 @@ service cloud.firestore {
         && data.content.size() <= 1000
         && (data.content.size() > 0 || data.attachment != null)
         && isValidGlobalAttachment(data.attachment);
+    }
+
+    function isValidDirectThread(data) {
+      return data.keys().hasOnly([
+          "participantIds", "participantNames", "participantAvatars",
+          "lastMessageText", "lastMessageAuthorName", "lastMessageAt", "createdAt", "updatedAt"
+        ])
+        && data.participantIds is list
+        && data.participantIds.size() == 2
+        && request.auth.uid in data.participantIds
+        && data.participantNames is map
+        && data.participantAvatars is map
+        && data.lastMessageText is string
+        && data.lastMessageText.size() <= 1000
+        && data.lastMessageAuthorName is string
+        && data.lastMessageAuthorName.size() <= 80;
+    }
+
+    function canReadDirectThread(roomId, threadId) {
+      return isRoomMember(roomId)
+        && request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)/directThreads/$(threadId)).data.participantIds;
+    }
+
+    function isValidDirectMessage(data) {
+      return data.keys().hasOnly(["userId", "authorName", "authorAvatar", "content", "createdAt"])
+        && data.userId == request.auth.uid
+        && data.authorName is string
+        && data.authorName.size() > 0
+        && data.authorName.size() <= 80
+        && (data.authorAvatar == null || data.authorAvatar is string)
+        && data.content is string
+        && data.content.size() > 0
+        && data.content.size() <= 1000;
     }
 
     match /users/{userId} {
@@ -245,6 +283,22 @@ service cloud.firestore {
         allow read: if isRoomMember(roomId);
         allow create: if isRoomMember(roomId) && isValidRoomMessage(request.resource.data);
         allow update, delete: if false;
+      }
+
+      match /directThreads/{threadId} {
+        allow read: if isRoomMember(roomId) && request.auth.uid in resource.data.participantIds;
+        allow create: if isRoomMember(roomId) && isValidDirectThread(request.resource.data);
+        allow update: if isRoomMember(roomId)
+          && request.auth.uid in resource.data.participantIds
+          && request.resource.data.participantIds == resource.data.participantIds
+          && isValidDirectThread(request.resource.data);
+        allow delete: if false;
+
+        match /messages/{messageId} {
+          allow read: if canReadDirectThread(roomId, threadId);
+          allow create: if canReadDirectThread(roomId, threadId) && isValidDirectMessage(request.resource.data);
+          allow update, delete: if false;
+        }
       }
     }
 

@@ -71,6 +71,13 @@ export function getLocalFileIdFromUrl(fileUrl: string) {
   return fileUrl.startsWith(LOCAL_FILE_PROTOCOL) ? fileUrl.slice(LOCAL_FILE_PROTOCOL.length) : null;
 }
 
+async function createObjectUrlFromDataUrl(dataUrl: string) {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+
+  return URL.createObjectURL(blob);
+}
+
 export async function saveLocalFile(file: File) {
   const id = crypto.randomUUID();
   const record: StoredLocalFile = {
@@ -99,7 +106,14 @@ export async function deleteLocalFile(localFileId: string) {
 }
 
 export async function openAcademicUpload(upload: AcademicUpload) {
-  if (upload.storageProvider === "url" || upload.storageProvider === "firebase" || upload.fileType === "link") {
+  if (upload.storageProvider === "inline" || upload.fileUrl.startsWith("data:")) {
+    const objectUrl = await createObjectUrlFromDataUrl(upload.fileUrl);
+    window.open(objectUrl, "_blank", "noopener,noreferrer");
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    return;
+  }
+
+  if (upload.storageProvider === "blob" || upload.storageProvider === "url" || upload.fileType === "link") {
     window.open(upload.fileUrl, "_blank", "noopener,noreferrer");
     return;
   }
@@ -111,6 +125,12 @@ export async function openAcademicUpload(upload: AcademicUpload) {
 
   const record = await getLocalFile(localFileId);
   if (!record) {
+    if (upload.visibility === "shared") {
+      throw new Error(
+        "Este material antigo foi salvo apenas no navegador de envio. Reenvie como compartilhavel ate 640 KB ou salve um link externo.",
+      );
+    }
+
     throw new Error("Este material está disponível apenas no dispositivo em que foi enviado.");
   }
 
@@ -131,8 +151,15 @@ function triggerDownload(url: string, fileName: string) {
 }
 
 export async function downloadAcademicUpload(upload: AcademicUpload) {
-  if (upload.storageProvider === "url" || upload.storageProvider === "firebase" || upload.fileType === "link") {
-    triggerDownload(upload.fileUrl, upload.fileName || upload.title);
+  if (upload.storageProvider === "inline" || upload.fileUrl.startsWith("data:")) {
+    const objectUrl = await createObjectUrlFromDataUrl(upload.fileUrl);
+    triggerDownload(objectUrl, upload.fileName || upload.title);
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    return;
+  }
+
+  if (upload.storageProvider === "blob" || upload.storageProvider === "url" || upload.fileType === "link") {
+    triggerDownload(upload.downloadUrl ?? upload.fileUrl, upload.fileName || upload.title);
     return;
   }
 
@@ -143,6 +170,12 @@ export async function downloadAcademicUpload(upload: AcademicUpload) {
 
   const record = await getLocalFile(localFileId);
   if (!record) {
+    if (upload.visibility === "shared") {
+      throw new Error(
+        "Este material antigo foi salvo apenas no navegador de envio. Reenvie como compartilhavel ate 640 KB ou salve um link externo.",
+      );
+    }
+
     throw new Error("Este material está disponível apenas no dispositivo em que foi enviado.");
   }
 

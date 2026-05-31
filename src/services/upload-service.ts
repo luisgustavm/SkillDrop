@@ -13,14 +13,19 @@ import {
   where,
   type Unsubscribe,
 } from "firebase/firestore";
-import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { collections } from "@/firebase/collections";
-import { getClientFirestore, getClientStorage, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
+import {
+  getClientAuth,
+  getClientFirestore,
+  getFirebaseConfigError,
+  isFirebaseConfigured,
+  waitForAuthPersistence,
+} from "@/firebase/client";
 import { sanitizeFileName, sanitizeText } from "@/lib/sanitize";
-import { deleteLocalFile } from "@/services/local-file-service";
+import { createLocalFileUrl, deleteLocalFile } from "@/services/local-file-service";
 import { createActivityLog } from "@/services/activity-service";
 import { normalizeRoomCode } from "@/services/room-service";
-import type { AcademicUpload, CreateUploadInput, FileKind, UploadProgress } from "@/types/upload";
+import type { AcademicUpload, CreateUploadInput, FileKind } from "@/types/upload";
 import { classifyFile } from "@/utils/file";
 import { toDate } from "@/utils/date";
 
@@ -29,8 +34,13 @@ type SaveUploadInput = {
   roomId: string;
   file: File;
   metadata: CreateUploadInput;
-  fileUrl: string;
-  storagePath: string;
+  blob?: {
+    url: string;
+    downloadUrl?: string | null;
+    pathname: string;
+  } | null;
+  localFileId?: string | null;
+  inlineDataUrl?: string | null;
 };
 
 type SaveLinkInput = {
@@ -40,64 +50,11 @@ type SaveLinkInput = {
   metadata: CreateUploadInput;
 };
 
-type UploadAcademicFileInput = {
-  userId: string;
-  roomId: string;
-  file: File;
-  onProgress?: (progress: UploadProgress) => void;
-};
-
 function normalizeScopedRoomId(roomId: string) {
   const normalized = normalizeRoomCode(roomId);
   if (normalized.length !== 8) throw new Error("Sala invalida para envio.");
 
   return normalized;
-}
-
-function createStoragePath(userId: string, roomId: string, fileName: string) {
-  const safeFileName = sanitizeFileName(fileName) || "skilldrop-material";
-
-  return `rooms/${normalizeScopedRoomId(roomId)}/uploads/${userId}/${crypto.randomUUID()}-${safeFileName}`;
-}
-
-export async function uploadAcademicFile(input: UploadAcademicFileInput) {
-  if (!isFirebaseConfigured) throw getFirebaseConfigError();
-
-  const storagePath = createStoragePath(input.userId, input.roomId, input.file.name);
-  const storageRef = ref(getClientStorage(), storagePath);
-  const uploadTask = uploadBytesResumable(storageRef, input.file, {
-    contentType: input.file.type || "application/octet-stream",
-    customMetadata: {
-      roomId: normalizeScopedRoomId(input.roomId),
-      userId: input.userId,
-    },
-  });
-
-  return new Promise<{ fileUrl: string; storagePath: string }>((resolve, reject) => {
-    uploadTask.on(
-      "state_changed",
-      (snapshot) => {
-        const percentage = snapshot.totalBytes
-          ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
-          : 0;
-
-        input.onProgress?.({
-          bytesTransferred: snapshot.bytesTransferred,
-          totalBytes: snapshot.totalBytes,
-          percentage,
-        });
-      },
-      reject,
-      async () => {
-        try {
-          const fileUrl = await getDownloadURL(uploadTask.snapshot.ref);
-          resolve({ fileUrl, storagePath });
-        } catch (error) {
-          reject(error);
-        }
-      },
-    );
-  });
 }
 
 export async function saveUploadMetadata(input: SaveUploadInput) {
@@ -106,15 +63,31 @@ export async function saveUploadMetadata(input: SaveUploadInput) {
   const roomId = normalizeScopedRoomId(input.roomId);
   const shareId = crypto.randomUUID();
   const safeFileName = sanitizeFileName(input.file.name);
+  const blob = input.blob ?? null;
+  const inlineDataUrl = input.metadata.visibility === "shared" ? (input.inlineDataUrl?.trim() ?? "") : "";
+  const usesInlineStorage = Boolean(inlineDataUrl);
+  const localFileId = input.localFileId ?? null;
+
+  if (!blob && !usesInlineStorage && !localFileId) {
+    throw new Error("Nao foi possivel salvar o arquivo no Vercel Blob.");
+  }
+
+  const browserFileUrl = localFileId ? createLocalFileUrl(localFileId) : "";
+  const browserStoragePath = localFileId ? `indexeddb://${localFileId}` : "";
+  const fileUrl = blob?.url ?? (usesInlineStorage ? inlineDataUrl : browserFileUrl);
+  const downloadUrl = blob?.downloadUrl ?? (blob ? blob.url : null);
+  const storagePath = blob?.pathname ?? (usesInlineStorage ? `inline://${shareId}` : browserStoragePath);
+  const storageProvider = blob ? "blob" : usesInlineStorage ? "inline" : "browser";
   const payload = {
     userId: input.userId,
     roomId,
     title: sanitizeText(input.metadata.title, 120),
     description: sanitizeText(input.metadata.description, 1000),
-    fileUrl: input.fileUrl,
-    storagePath: input.storagePath,
-    storageProvider: "firebase",
-    localFileId: null,
+    fileUrl,
+    downloadUrl,
+    storagePath,
+    storageProvider,
+    localFileId,
     fileName: safeFileName,
     fileType: classifyFile(input.file),
     mimeType: input.file.type || "application/octet-stream",
@@ -150,6 +123,7 @@ export async function saveLinkUpload(input: SaveLinkInput) {
     title: sanitizeText(input.metadata.title, 120),
     description: sanitizeText(input.metadata.description, 1000),
     fileUrl: parsedUrl.toString(),
+    downloadUrl: parsedUrl.toString(),
     storagePath: "",
     storageProvider: "url",
     localFileId: null,
@@ -179,11 +153,25 @@ export async function saveLinkUpload(input: SaveLinkInput) {
 export async function deleteAcademicUpload(upload: AcademicUpload) {
   if (!isFirebaseConfigured) throw getFirebaseConfigError();
 
-  await deleteDoc(doc(getClientFirestore(), collections.uploads, upload.id));
+  if (upload.storageProvider === "blob") {
+    await waitForAuthPersistence();
+    const idToken = await getClientAuth().currentUser?.getIdToken();
+    const response = await fetch("/api/blob/delete", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+      },
+      body: JSON.stringify({ uploadId: upload.id }),
+    });
 
-  if (upload.storageProvider === "firebase" && upload.storagePath) {
-    await deleteObject(ref(getClientStorage(), upload.storagePath)).catch(() => undefined);
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error ?? "Nao foi possivel excluir o arquivo do Vercel Blob.");
+    }
   }
+
+  await deleteDoc(doc(getClientFirestore(), collections.uploads, upload.id));
 
   if (upload.localFileId) {
     await deleteLocalFile(upload.localFileId).catch(() => undefined);
@@ -267,11 +255,14 @@ export function listenSharedUploadByShareId(
 export function mapUpload(id: string, data: Record<string, unknown>): AcademicUpload {
   const fileUrl = String(data.fileUrl);
   const rawStorageProvider = String(data.storageProvider ?? "");
-  const storageProvider = rawStorageProvider === "firebase"
-    ? "firebase"
-    : rawStorageProvider === "url" || fileUrl.startsWith("http")
+  const storageProvider =
+    rawStorageProvider === "blob" || fileUrl.includes(".blob.vercel-storage.com")
+      ? "blob"
+      : rawStorageProvider === "url" || fileUrl.startsWith("http")
       ? "url"
-      : "browser";
+      : rawStorageProvider === "inline" || fileUrl.startsWith("data:")
+        ? "inline"
+        : "browser";
 
   return {
     id,
@@ -280,6 +271,7 @@ export function mapUpload(id: string, data: Record<string, unknown>): AcademicUp
     title: String(data.title),
     description: String(data.description ?? ""),
     fileUrl,
+    downloadUrl: typeof data.downloadUrl === "string" ? data.downloadUrl : null,
     storagePath: String(data.storagePath),
     storageProvider,
     localFileId: typeof data.localFileId === "string" ? data.localFileId : null,

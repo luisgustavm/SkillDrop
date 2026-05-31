@@ -102,6 +102,12 @@ export function RecentUploads({ userId, roomId, uploads, favoriteUploadIds }: Re
                   <Badge variant={upload.visibility === "shared" ? "default" : "muted"}>
                     {upload.visibility === "shared" ? "compartilhado" : "privado"}
                   </Badge>
+                  {upload.visibility === "shared" && upload.storageProvider === "browser" ? (
+                    <Badge variant="muted">local antigo</Badge>
+                  ) : null}
+                  {upload.storageProvider === "inline" || upload.storageProvider === "blob" ? (
+                    <Badge variant="secondary">baixavel</Badge>
+                  ) : null}
                 </div>
                 <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
                   {upload.description || upload.fileName}

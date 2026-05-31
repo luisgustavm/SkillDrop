@@ -23,7 +23,14 @@ import {
 import { collections } from "@/firebase/collections";
 import { getClientFirestore, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
 import { sanitizeText } from "@/lib/sanitize";
-import type { GlobalChatAttachment, PrivateRoom, RoomJoinRequest, RoomMessage } from "@/types/chat";
+import type {
+  GlobalChatAttachment,
+  PrivateRoom,
+  RoomDirectMessage,
+  RoomJoinRequest,
+  RoomMemberProfile,
+  RoomMessage,
+} from "@/types/chat";
 import { toDate } from "@/utils/date";
 
 const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -32,6 +39,7 @@ const ROOM_CODE_LENGTH = 8;
 type CreateRoomInput = {
   userId: string;
   ownerName: string;
+  ownerAvatar: string | null;
   name: string;
 };
 
@@ -60,6 +68,20 @@ type SendRoomMessageInput = {
   attachment?: GlobalChatAttachment | null;
 };
 
+type DirectConversationInput = {
+  roomId: string;
+  currentUserId: string;
+  peerUserId: string;
+};
+
+type SendDirectMessageInput = DirectConversationInput & {
+  authorName: string;
+  authorAvatar: string | null;
+  peerName: string;
+  peerAvatar: string | null;
+  content: string;
+};
+
 export function normalizeRoomCode(value: string) {
   return value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, ROOM_CODE_LENGTH);
 }
@@ -80,6 +102,18 @@ function roomDocument(roomId: string) {
 
 function roomMessagesCollection(roomId: string) {
   return collection(roomDocument(roomId), "messages");
+}
+
+function directThreadId(currentUserId: string, peerUserId: string) {
+  return [currentUserId, peerUserId].sort().join("__");
+}
+
+function directThreadDocument(input: DirectConversationInput) {
+  return doc(roomDocument(input.roomId), "directThreads", directThreadId(input.currentUserId, input.peerUserId));
+}
+
+function directMessagesCollection(input: DirectConversationInput) {
+  return collection(directThreadDocument(input), "messages");
 }
 
 async function createUniqueRoomCode() {
@@ -105,6 +139,15 @@ export async function createPrivateRoom(input: CreateRoomInput) {
     name,
     ownerId: input.userId,
     ownerName,
+    memberProfiles: [
+      {
+        userId: input.userId,
+        name: ownerName,
+        avatar: input.ownerAvatar,
+        role: "admin",
+        joinedAt: Timestamp.now(),
+      },
+    ],
     memberIds: [input.userId],
     memberCount: 1,
     pendingRequests: [],
@@ -215,11 +258,82 @@ async function reviewRoomJoinRequest(input: ReviewJoinRequestInput, action: "app
       ...(action === "approve"
         ? {
             memberIds: arrayUnion(input.requestUserId),
+            memberProfiles: arrayUnion({
+              userId: input.requestUserId,
+              name: sanitizeText(String(request.name ?? ""), 80) || "Estudante",
+              avatar: typeof request.avatar === "string" ? request.avatar : null,
+              role: "member",
+              joinedAt: Timestamp.now(),
+            }),
             memberCount: increment(1),
           }
         : {}),
       updatedAt: serverTimestamp(),
     });
+  });
+}
+
+export function listenRoomDirectMessages(
+  input: DirectConversationInput,
+  onData: (messages: RoomDirectMessage[]) => void,
+  onError: (error: Error) => void,
+  resultLimit = 80,
+): Unsubscribe {
+  if (!isFirebaseConfigured) {
+    onData([]);
+    return () => undefined;
+  }
+
+  const messagesQuery = query(directMessagesCollection(input), orderBy("createdAt", "desc"), limit(resultLimit));
+
+  return onSnapshot(
+    messagesQuery,
+    (snapshot) => onData(snapshot.docs.map((item) => mapDirectMessage(item.id, item.data())).reverse()),
+    onError,
+  );
+}
+
+export async function sendRoomDirectMessage(input: SendDirectMessageInput) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
+  const content = sanitizeText(input.content, 1000);
+
+  if (!content) {
+    throw new Error("Escreva uma mensagem privada.");
+  }
+
+  const authorName = sanitizeText(input.authorName, 80) || "Estudante";
+  const peerName = sanitizeText(input.peerName, 80) || "Integrante";
+  const threadRef = directThreadDocument(input);
+  const participantIds = [input.currentUserId, input.peerUserId].sort();
+
+  await setDoc(
+    threadRef,
+    {
+      participantIds,
+      participantNames: {
+        [input.currentUserId]: authorName,
+        [input.peerUserId]: peerName,
+      },
+      participantAvatars: {
+        [input.currentUserId]: input.authorAvatar,
+        [input.peerUserId]: input.peerAvatar,
+      },
+      lastMessageText: content,
+      lastMessageAuthorName: authorName,
+      lastMessageAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  await addDoc(directMessagesCollection(input), {
+    userId: input.currentUserId,
+    authorName,
+    authorAvatar: input.authorAvatar,
+    content,
+    createdAt: serverTimestamp(),
   });
 }
 
@@ -311,13 +425,18 @@ function mapAttachment(value: unknown): GlobalChatAttachment | null {
 }
 
 function mapRoom(id: string, data: Record<string, unknown>): PrivateRoom {
+  const ownerId = String(data.ownerId ?? "");
+  const ownerName = String(data.ownerName ?? "Estudante");
+  const memberIds = Array.isArray(data.memberIds) ? data.memberIds.map(String) : [];
+
   return {
     id,
     code: String(data.code ?? id),
     name: String(data.name ?? "Sala de estudos"),
-    ownerId: String(data.ownerId ?? ""),
-    ownerName: String(data.ownerName ?? "Estudante"),
-    memberIds: Array.isArray(data.memberIds) ? data.memberIds.map(String) : [],
+    ownerId,
+    ownerName,
+    memberIds,
+    memberProfiles: mapMemberProfiles(data.memberProfiles, memberIds, ownerId, ownerName),
     memberCount: Number(data.memberCount ?? 1),
     pendingRequests: Array.isArray(data.pendingRequests) ? data.pendingRequests.map(mapJoinRequest) : [],
     lastMessageText: String(data.lastMessageText ?? ""),
@@ -325,6 +444,51 @@ function mapRoom(id: string, data: Record<string, unknown>): PrivateRoom {
     lastMessageAt: toDate(data.lastMessageAt),
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
+  };
+}
+
+function mapMemberProfiles(value: unknown, memberIds: string[], ownerId: string, ownerName: string): RoomMemberProfile[] {
+  const profiles = Array.isArray(value) ? value.map(mapMemberProfile).filter((member) => member.userId) : [];
+  const membersById = new Map(profiles.map((member) => [member.userId, member]));
+
+  if (ownerId && !membersById.has(ownerId)) {
+    membersById.set(ownerId, {
+      userId: ownerId,
+      name: ownerName,
+      avatar: null,
+      role: "admin",
+      joinedAt: null,
+    });
+  }
+
+  memberIds.forEach((userId) => {
+    if (!membersById.has(userId)) {
+      membersById.set(userId, {
+        userId,
+        name: userId === ownerId ? ownerName : "Integrante",
+        avatar: null,
+        role: userId === ownerId ? "admin" : "member",
+        joinedAt: null,
+      });
+    }
+  });
+
+  return Array.from(membersById.values()).sort((left, right) => {
+    if (left.role !== right.role) return left.role === "admin" ? -1 : 1;
+
+    return left.name.localeCompare(right.name);
+  });
+}
+
+function mapMemberProfile(data: unknown): RoomMemberProfile {
+  const member = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+
+  return {
+    userId: String(member.userId ?? ""),
+    name: String(member.name ?? "Integrante"),
+    avatar: typeof member.avatar === "string" ? member.avatar : null,
+    role: member.role === "admin" ? "admin" : "member",
+    joinedAt: toDate(member.joinedAt),
   };
 }
 
@@ -347,6 +511,17 @@ function mapRoomMessage(id: string, data: Record<string, unknown>): RoomMessage 
     authorAvatar: typeof data.authorAvatar === "string" ? data.authorAvatar : null,
     content: String(data.content ?? ""),
     attachment: mapAttachment(data.attachment),
+    createdAt: toDate(data.createdAt),
+  };
+}
+
+function mapDirectMessage(id: string, data: Record<string, unknown>): RoomDirectMessage {
+  return {
+    id,
+    userId: String(data.userId),
+    authorName: String(data.authorName ?? "Estudante"),
+    authorAvatar: typeof data.authorAvatar === "string" ? data.authorAvatar : null,
+    content: String(data.content ?? ""),
     createdAt: toDate(data.createdAt),
   };
 }

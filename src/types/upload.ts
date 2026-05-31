@@ -10,7 +10,7 @@ export type FileKind =
   | "other";
 
 export type UploadVisibility = "private" | "shared";
-export type UploadStorageProvider = "browser" | "url" | "firebase";
+export type UploadStorageProvider = "blob" | "browser" | "inline" | "url";
 
 export interface AcademicUpload {
   id: string;
@@ -19,6 +19,7 @@ export interface AcademicUpload {
   title: string;
   description: string;
   fileUrl: string;
+  downloadUrl: string | null;
   storagePath: string;
   storageProvider: UploadStorageProvider;
   localFileId: string | null;

@@ -14,6 +14,7 @@ import {
   Share2,
   Sun,
   UploadCloud,
+  UserCog,
   X,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -45,6 +46,7 @@ function createRoomNavigation(roomId: string | null) {
 
 function pageTitle(pathname: string, roomNavigation: ReturnType<typeof createRoomNavigation>) {
   if (pathname.startsWith("/global-chat")) return "Salas privadas";
+  if (pathname.startsWith("/profile")) return "Perfil";
   const activeItem = [...roomNavigation]
     .sort((left, right) => right.href.length - left.href.length)
     .find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
@@ -71,7 +73,22 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const navigation = useMemo(() => createRoomNavigation(activeRoomId), [activeRoomId]);
 
   useEffect(() => {
-    navigation.forEach((item) => router.prefetch(item.href));
+    const routes = [...navigation.map((item) => item.href), "/profile", "/rooms"];
+    const prefetch = () => routes.forEach((href) => router.prefetch(href));
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    if (idleWindow.requestIdleCallback && idleWindow.cancelIdleCallback) {
+      const idleId = idleWindow.requestIdleCallback(prefetch, { timeout: 1200 });
+
+      return () => idleWindow.cancelIdleCallback?.(idleId);
+    }
+
+    const timeoutId = globalThis.setTimeout(prefetch, 250);
+
+    return () => globalThis.clearTimeout(timeoutId);
   }, [navigation, router]);
 
   const navigate = (href: string) => {
@@ -157,8 +174,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <UserAvatar src={profile?.avatar} name={profile?.name} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{profile?.name ?? "Estudante"}</p>
-              <p className="truncate text-xs text-muted-foreground">{profile?.email ?? "Sessão convidada"}</p>
+              <p className="truncate text-xs text-muted-foreground">{profile?.email ?? "Conta SkillDrop"}</p>
             </div>
+            <Button asChild variant="ghost" size="icon" title="Perfil">
+              <Link href="/profile" prefetch onMouseEnter={() => router.prefetch("/profile")} onClick={() => navigate("/profile")}>
+                <UserCog className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </Button>
             <Button type="button" variant="ghost" size="icon" title="Sair" onClick={() => void logout()}>
               <LogOut className="h-4 w-4" aria-hidden="true" />
             </Button>

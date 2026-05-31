@@ -41,6 +41,7 @@ export interface PrivateRoom {
   ownerId: string;
   ownerName: string;
   memberIds: string[];
+  memberProfiles: RoomMemberProfile[];
   memberCount: number;
   pendingRequests: RoomJoinRequest[];
   lastMessageText: string;
@@ -48,6 +49,14 @@ export interface PrivateRoom {
   lastMessageAt: Date | null;
   createdAt: Date | null;
   updatedAt: Date | null;
+}
+
+export interface RoomMemberProfile {
+  userId: string;
+  name: string;
+  avatar: string | null;
+  role: "admin" | "member";
+  joinedAt: Date | null;
 }
 
 export interface RoomJoinRequest {
@@ -64,5 +73,14 @@ export interface RoomMessage {
   authorAvatar: string | null;
   content: string;
   attachment: GlobalChatAttachment | null;
+  createdAt: Date | null;
+}
+
+export interface RoomDirectMessage {
+  id: string;
+  userId: string;
+  authorName: string;
+  authorAvatar: string | null;
+  content: string;
   createdAt: Date | null;
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Copy,
+  Crown,
   DoorOpen,
   Download,
   FileText,
@@ -12,6 +13,7 @@ import {
   Link2,
   Loader2,
   LockKeyhole,
+  MessageCircle,
   MessagesSquare,
   Paperclip,
   Plus,
@@ -22,7 +24,7 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,15 +42,17 @@ import {
   approveRoomJoinRequest,
   createPrivateRoom,
   deletePrivateRoom,
+  listenRoomDirectMessages,
   listenRoomMessages,
   listenUserRooms,
   normalizeRoomCode,
   rejectRoomJoinRequest,
   requestJoinPrivateRoom,
+  sendRoomDirectMessage,
   sendRoomMessage,
 } from "@/services/room-service";
 import { createGlobalChatAttachment, MAX_GLOBAL_CHAT_ATTACHMENT_BYTES } from "@/services/global-chat-service";
-import type { GlobalChatAttachment, PrivateRoom, RoomMessage } from "@/types/chat";
+import type { GlobalChatAttachment, PrivateRoom, RoomDirectMessage, RoomMemberProfile, RoomMessage } from "@/types/chat";
 import { formatRelativeDate } from "@/utils/date";
 import { formatBytes } from "@/utils/file";
 
@@ -71,17 +75,23 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
   const [inviteCode, setInviteCode] = useState("");
   const [origin, setOrigin] = useState("");
   const [content, setContent] = useState("");
+  const [privateContent, setPrivateContent] = useState("");
   const [attachment, setAttachment] = useState<GlobalChatAttachment | null>(null);
+  const [selectedPrivateMember, setSelectedPrivateMember] = useState<RoomMemberProfile | null>(null);
+  const [privateMessages, setPrivateMessages] = useState<RoomDirectMessage[]>([]);
   const [preparingAttachment, setPreparingAttachment] = useState(false);
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingPrivateMessages, setLoadingPrivateMessages] = useState(false);
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null);
   const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [sendingPrivate, setSendingPrivate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const privateEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const activeRoom = useMemo(
@@ -92,6 +102,7 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
   const activeRoomOwner = Boolean(activeRoom && user?.uid === activeRoom.ownerId);
   const activeInviteUrl = activeRoom && origin ? `${origin}/rooms?room=${activeRoom.code}` : "";
   const roomUnavailable = Boolean(normalizedInitialRoomId && !loadingRooms && !activeRoom);
+  const roomMembers = activeRoom?.memberProfiles ?? [];
   const selectRoom = useCallback(
     (roomId: string) => {
       if (lobbyOnly) {
@@ -108,6 +119,9 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
       setError(null);
       setContent("");
       setAttachment(null);
+      setSelectedPrivateMember(null);
+      setPrivateContent("");
+      setPrivateMessages([]);
     },
     [lobbyOnly, normalizedInitialRoomId, router],
   );
@@ -216,6 +230,45 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
 
+  useEffect(() => {
+    privateEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [privateMessages]);
+
+  useEffect(() => {
+    if (!activeRoom || !selectedPrivateMember) return;
+    if (!activeRoom.memberIds.includes(selectedPrivateMember.userId)) {
+      setSelectedPrivateMember(null);
+      setPrivateContent("");
+      setPrivateMessages([]);
+    }
+  }, [activeRoom, selectedPrivateMember]);
+
+  useEffect(() => {
+    if (!activeRoom?.id || !user?.uid || !selectedPrivateMember) {
+      setPrivateMessages([]);
+      setLoadingPrivateMessages(false);
+      return;
+    }
+
+    setLoadingPrivateMessages(true);
+
+    return listenRoomDirectMessages(
+      {
+        roomId: activeRoom.id,
+        currentUserId: user.uid,
+        peerUserId: selectedPrivateMember.userId,
+      },
+      (items) => {
+        setPrivateMessages(items);
+        setLoadingPrivateMessages(false);
+      },
+      (privateError) => {
+        setError(privateError.message);
+        setLoadingPrivateMessages(false);
+      },
+    );
+  }, [activeRoom?.id, selectedPrivateMember, user?.uid]);
+
   const createRoom = async () => {
     if (!user) return;
 
@@ -226,6 +279,7 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
       const roomInput = {
         userId: user.uid,
         ownerName: profile?.name ?? user.displayName ?? "Estudante",
+        ownerAvatar: profile?.avatar ?? user.photoURL ?? null,
         name: roomName,
       };
       const code = await createPrivateRoom(roomInput);
@@ -286,6 +340,34 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
       toast.error(message);
     } finally {
       setReviewingRequestId(null);
+    }
+  };
+
+  const submitPrivateMessage = async () => {
+    const trimmedContent = privateContent.trim();
+    if (!trimmedContent || !user || !activeRoom || !selectedPrivateMember) return;
+
+    setSendingPrivate(true);
+    setError(null);
+
+    try {
+      await sendRoomDirectMessage({
+        roomId: activeRoom.id,
+        currentUserId: user.uid,
+        peerUserId: selectedPrivateMember.userId,
+        authorName: profile?.name ?? user.displayName ?? "Estudante",
+        authorAvatar: profile?.avatar ?? user.photoURL ?? null,
+        peerName: selectedPrivateMember.name,
+        peerAvatar: selectedPrivateMember.avatar,
+        content: trimmedContent,
+      });
+      setPrivateContent("");
+    } catch (messageError) {
+      const message = messageError instanceof Error ? messageError.message : "Nao foi possivel enviar a mensagem privada.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSendingPrivate(false);
     }
   };
 
@@ -642,6 +724,78 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
           </div>
         ) : null}
 
+        {activeRoom ? (
+          <div className="space-y-3 rounded-lg border bg-background p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold">Integrantes</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Admin e participantes aprovados.</p>
+              </div>
+              <Badge variant="muted">{roomMembers.length}</Badge>
+            </div>
+            <div className="space-y-2">
+              {roomMembers.map((member) => {
+                const mine = member.userId === user?.uid;
+                const admin = member.role === "admin";
+
+                return (
+                  <div key={member.userId} className="rounded-md border bg-card p-3">
+                    <div className="flex items-center gap-3">
+                      <UserAvatar src={member.avatar} name={member.name} className="h-8 w-8" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <p className="truncate text-sm font-medium">{mine ? "Voce" : member.name}</p>
+                          {admin ? (
+                            <Badge variant="secondary" className="shrink-0">
+                              <Crown className="h-3 w-3" aria-hidden="true" />
+                              Admin
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{admin ? "Administrador da sala" : "Integrante"}</p>
+                      </div>
+                    </div>
+                    {!mine ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={selectedPrivateMember?.userId === member.userId ? "default" : "outline"}
+                        className="mt-3 w-full"
+                        onClick={() => {
+                          setSelectedPrivateMember(member);
+                          setPrivateContent("");
+                          setError(null);
+                        }}
+                      >
+                        <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                        Mensagem privada
+                      </Button>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {activeRoom && selectedPrivateMember ? (
+          <PrivateMessagePanel
+            member={selectedPrivateMember}
+            messages={privateMessages}
+            currentUserId={user?.uid ?? ""}
+            content={privateContent}
+            loading={loadingPrivateMessages}
+            sending={sendingPrivate}
+            endRef={privateEndRef}
+            onContentChange={setPrivateContent}
+            onClose={() => {
+              setSelectedPrivateMember(null);
+              setPrivateContent("");
+            }}
+            onSend={() => void submitPrivateMessage()}
+          />
+        ) : null}
+
         {activeRoom && activeRoomOwner ? (
           <div className="space-y-3 rounded-lg border bg-background p-4">
             <div>
@@ -713,6 +867,99 @@ export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalCh
         </div>
       </aside>
     </section>
+  );
+}
+
+function PrivateMessagePanel({
+  member,
+  messages,
+  currentUserId,
+  content,
+  loading,
+  sending,
+  endRef,
+  onContentChange,
+  onClose,
+  onSend,
+}: {
+  member: RoomMemberProfile;
+  messages: RoomDirectMessage[];
+  currentUserId: string;
+  content: string;
+  loading: boolean;
+  sending: boolean;
+  endRef: RefObject<HTMLDivElement | null>;
+  onContentChange: (value: string) => void;
+  onClose: () => void;
+  onSend: () => void;
+}) {
+  return (
+    <div className="space-y-3 rounded-lg border bg-background p-4">
+      <div className="flex items-start gap-3">
+        <UserAvatar src={member.avatar} name={member.name} className="h-9 w-9" />
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-semibold">Privado com {member.name}</h3>
+          <p className="text-xs text-muted-foreground">Somente voces dois veem esta conversa.</p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" title="Fechar conversa privada" onClick={onClose}>
+          <X className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </div>
+
+      <div className="scrollbar-thin max-h-72 space-y-3 overflow-y-auto rounded-md border bg-card p-3">
+        {loading ? <Skeleton className="h-20 w-full" /> : null}
+        {!loading && !messages.length ? (
+          <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+            Envie a primeira mensagem privada.
+          </p>
+        ) : null}
+        {messages.map((message) => (
+          <DirectMessageBubble key={message.id} message={message} mine={message.userId === currentUserId} />
+        ))}
+        <div ref={endRef} />
+      </div>
+
+      <form
+        className="space-y-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSend();
+        }}
+      >
+        <Textarea
+          value={content}
+          maxLength={1000}
+          onChange={(event) => onContentChange(event.target.value)}
+          placeholder="Escreva uma mensagem privada..."
+          className="min-h-20 resize-none"
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) onSend();
+          }}
+        />
+        <Button type="submit" className="w-full" disabled={sending || !content.trim()}>
+          {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
+          Enviar privado
+        </Button>
+      </form>
+    </div>
+  );
+}
+
+function DirectMessageBubble({ message, mine }: { message: RoomDirectMessage; mine: boolean }) {
+  return (
+    <div className={cn("flex", mine && "justify-end")}>
+      <div
+        className={cn(
+          "max-w-[92%] rounded-lg border px-3 py-2 text-sm leading-5",
+          mine ? "bg-primary text-primary-foreground" : "bg-background",
+        )}
+      >
+        <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        <p className={cn("mt-1 text-[11px]", mine ? "text-primary-foreground/75" : "text-muted-foreground")}>
+          {formatRelativeDate(message.createdAt)}
+        </p>
+      </div>
+    </div>
   );
 }
 

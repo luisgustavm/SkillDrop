@@ -79,8 +79,6 @@ function LoginForm() {
         disabled={!firebaseReady || loading}
         onGoogle={async () => {
           await loginGoogle();
-          toast.success("Login Google conectado.");
-          router.replace(getAuthRedirectPath());
         }}
       />
 
@@ -149,8 +147,6 @@ function RegisterForm() {
         disabled={!firebaseReady || loading}
         onGoogle={async () => {
           await loginGoogle();
-          toast.success("Login Google conectado.");
-          router.replace(getAuthRedirectPath());
         }}
       />
     </AuthFrame>

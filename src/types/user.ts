@@ -1,4 +1,5 @@
 export type AuthProviderId = "password" | "google.com" | "anonymous";
+export type AccountStatus = "active" | "inactive" | "deleted";
 
 export interface SkillDropUser {
   uid: string;
@@ -7,6 +8,9 @@ export interface SkillDropUser {
   avatar: string | null;
   provider: AuthProviderId;
   isAnonymous: boolean;
+  accountStatus: AccountStatus;
+  deactivatedAt: Date | null;
+  deletedAt: Date | null;
   createdAt: Date | null;
   updatedAt: Date | null;
 }

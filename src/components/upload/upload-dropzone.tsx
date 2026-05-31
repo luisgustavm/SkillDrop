@@ -37,6 +37,7 @@ export function UploadDropzone({ userId, roomId }: UploadDropzoneProps) {
       visibility: "private",
     },
   });
+  const selectedVisibility = form.watch("visibility");
 
   const handleFile = (file?: File) => {
     upload.selectFile(file ?? null);
@@ -213,14 +214,19 @@ export function UploadDropzone({ userId, roomId }: UploadDropzoneProps) {
                   key={visibility}
                   className={cn(
                     "cursor-pointer rounded-md border p-3 text-sm transition hover:bg-muted",
-                    form.watch("visibility") === visibility && "border-primary bg-primary/10 text-primary",
+                    selectedVisibility === visibility && "border-primary bg-primary/10 text-primary",
                   )}
                 >
                   <input type="radio" value={visibility} className="sr-only" {...form.register("visibility")} />
-                  {visibility === "private" ? "Privado" : "Compartilhável"}
+                  {visibility === "private" ? "Privado" : "Compartilhavel"}
                 </label>
               ))}
             </div>
+            {selectedVisibility === "shared" ? (
+              <p className="rounded-md border bg-muted/60 p-3 text-xs text-muted-foreground">
+                Arquivos compartilhaveis sao salvos no Vercel Blob e podem ser abertos ou baixados pelo link da sala.
+              </p>
+            ) : null}
           </fieldset>
         </div>
 

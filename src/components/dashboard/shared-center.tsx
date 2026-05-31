@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { FileTypeIcon } from "@/components/shared/file-type-icon";
 import { OpenUploadButton } from "@/components/shared/open-upload-button";
 import { QrShare } from "@/components/shared/qr-share";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { useDashboardData } from "@/hooks/use-dashboard-data";
 import type { AcademicUpload } from "@/types/upload";
@@ -67,7 +68,10 @@ export function SharedCenter({ roomId }: SharedCenterProps) {
             >
               <FileTypeIcon type={upload.fileType} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{upload.title}</p>
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="truncate text-sm font-medium">{upload.title}</p>
+                  {upload.storageProvider === "browser" ? <Badge variant="muted">local antigo</Badge> : null}
+                </div>
                 <p className="truncate text-xs text-muted-foreground">{upload.fileName}</p>
               </div>
             </button>
@@ -87,7 +91,7 @@ export function SharedCenter({ roomId }: SharedCenterProps) {
         ) : null}
         {selectedUpload?.storageProvider === "browser" ? (
           <p className="text-xs text-muted-foreground">
-            Este material está disponível no dispositivo de envio. Para acesso em outros dispositivos, prefira compartilhar links externos.
+            Este material foi enviado antes do modo baixavel. Se o arquivo nao abrir aqui, reenvie como compartilhavel ate 640 KB ou salve um link externo.
           </p>
         ) : null}
       </aside>
