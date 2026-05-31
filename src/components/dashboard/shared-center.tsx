@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Share2 } from "lucide-react";
 import { DownloadUploadButton } from "@/components/shared/download-upload-button";
+import { DeleteUploadButton } from "@/components/shared/delete-upload-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FileTypeIcon } from "@/components/shared/file-type-icon";
 import { OpenUploadButton } from "@/components/shared/open-upload-button";
@@ -77,6 +78,7 @@ export function SharedCenter() {
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
             <OpenUploadButton upload={selectedUpload} label="Abrir" className="w-full" />
             <DownloadUploadButton upload={selectedUpload} className="w-full" />
+            <DeleteUploadButton upload={selectedUpload} label="Excluir" className="w-full" onDeleted={() => setSelectedId(null)} />
           </div>
         ) : null}
         {selectedUpload?.storageProvider === "browser" ? (

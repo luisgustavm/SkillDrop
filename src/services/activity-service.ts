@@ -12,7 +12,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { collections } from "@/firebase/collections";
-import { getClientFirestore } from "@/firebase/client";
+import { getClientFirestore, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
 import type { ActivityLog, ActivityType } from "@/types/activity";
 import { toDate } from "@/utils/date";
 
@@ -22,6 +22,8 @@ export async function createActivityLog(input: {
   message: string;
   uploadId?: string;
 }) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
   await addDoc(collection(getClientFirestore(), collections.activityLogs), {
     ...input,
     createdAt: serverTimestamp(),
@@ -33,6 +35,11 @@ export function listenActivities(
   onData: (activities: ActivityLog[]) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
+  if (!isFirebaseConfigured) {
+    onData([]);
+    return () => undefined;
+  }
+
   const activitiesQuery = query(
     collection(getClientFirestore(), collections.activityLogs),
     where("userId", "==", userId),

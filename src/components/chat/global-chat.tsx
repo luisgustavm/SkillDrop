@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Copy,
   DoorOpen,
@@ -15,6 +17,8 @@ import {
   Plus,
   Send,
   ShieldCheck,
+  UserCheck,
+  UserX,
   UsersRound,
   X,
 } from "lucide-react";
@@ -25,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { DeleteConfirmCard } from "@/components/shared/delete-confirm-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { UserAvatar } from "@/components/shared/user-avatar";
@@ -32,20 +37,16 @@ import { useAuth } from "@/hooks/use-auth";
 import { sanitizeFileName } from "@/lib/sanitize";
 import { cn } from "@/lib/utils";
 import {
+  approveRoomJoinRequest,
   createPrivateRoom,
-  joinPrivateRoom,
+  deletePrivateRoom,
   listenRoomMessages,
   listenUserRooms,
   normalizeRoomCode,
+  rejectRoomJoinRequest,
+  requestJoinPrivateRoom,
   sendRoomMessage,
 } from "@/services/room-service";
-import {
-  createDemoRoom,
-  joinDemoRoom,
-  listDemoRoomMessages,
-  listDemoRooms,
-  sendDemoRoomMessage,
-} from "@/services/demo-room-service";
 import { createGlobalChatAttachment, MAX_GLOBAL_CHAT_ATTACHMENT_BYTES } from "@/services/global-chat-service";
 import type { GlobalChatAttachment, PrivateRoom, RoomMessage } from "@/types/chat";
 import { formatRelativeDate } from "@/utils/date";
@@ -53,15 +54,21 @@ import { formatBytes } from "@/utils/file";
 
 const attachmentAccept = "image/*,.pdf,.doc,.docx,.zip,.txt,.md,.js,.jsx,.ts,.tsx,.py,.java,.cs,.html,.css,.sql,.json";
 
-export function GlobalChat() {
-  const { user, profile, firebaseReady, testMode } = useAuth();
+type GlobalChatProps = {
+  initialRoomId?: string | null;
+  lobbyOnly?: boolean;
+};
+
+export function GlobalChat({ initialRoomId = null, lobbyOnly = false }: GlobalChatProps) {
+  const router = useRouter();
+  const { user, profile } = useAuth();
+  const normalizedInitialRoomId = initialRoomId ? normalizeRoomCode(initialRoomId) : null;
   const [rooms, setRooms] = useState<PrivateRoom[]>([]);
   const [messages, setMessages] = useState<RoomMessage[]>([]);
-  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
+  const [activeRoomId, setActiveRoomId] = useState<string | null>(normalizedInitialRoomId);
   const [roomName, setRoomName] = useState("Sala de estudos");
   const [joinCode, setJoinCode] = useState("");
   const [inviteCode, setInviteCode] = useState("");
-  const [handledInviteCode, setHandledInviteCode] = useState("");
   const [origin, setOrigin] = useState("");
   const [content, setContent] = useState("");
   const [attachment, setAttachment] = useState<GlobalChatAttachment | null>(null);
@@ -70,6 +77,8 @@ export function GlobalChat() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null);
+  const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -79,27 +88,31 @@ export function GlobalChat() {
     () => rooms.find((room) => room.id === activeRoomId) ?? null,
     [activeRoomId, rooms],
   );
+  const activeMessageRoomId = activeRoom?.id ?? null;
+  const activeRoomOwner = Boolean(activeRoom && user?.uid === activeRoom.ownerId);
   const activeInviteUrl = activeRoom && origin ? `${origin}/rooms?room=${activeRoom.code}` : "";
-  const refreshDemoRooms = useCallback(() => {
-    if (!user) return;
+  const roomUnavailable = Boolean(normalizedInitialRoomId && !loadingRooms && !activeRoom);
+  const selectRoom = useCallback(
+    (roomId: string) => {
+      if (lobbyOnly) {
+        router.push(`/rooms/${encodeURIComponent(roomId)}`);
+        return;
+      }
 
-    setRooms(listDemoRooms(user.uid));
-  }, [user]);
+      if (normalizedInitialRoomId) {
+        router.push(`/rooms/${encodeURIComponent(roomId)}`);
+        return;
+      }
 
-  const selectRoom = useCallback((roomId: string) => {
-    setActiveRoomId(roomId);
-    setError(null);
-    setContent("");
-    setAttachment(null);
+      setActiveRoomId(roomId);
+      setError(null);
+      setContent("");
+      setAttachment(null);
+    },
+    [lobbyOnly, normalizedInitialRoomId, router],
+  );
 
-    if (typeof window !== "undefined") {
-      const nextUrl = new URL(window.location.href);
-      nextUrl.searchParams.set("room", roomId);
-      window.history.replaceState(null, "", nextUrl);
-    }
-  }, []);
-
-  const joinRoomByCode = useCallback(
+  const requestRoomAccess = useCallback(
     async (rawCode: string, silent = false) => {
       if (!user) return;
 
@@ -110,20 +123,25 @@ export function GlobalChat() {
       setError(null);
 
       try {
-        const joinedCode = firebaseReady ? await joinPrivateRoom({ userId: user.uid, code }) : joinDemoRoom(user.uid, code);
-        if (!firebaseReady) refreshDemoRooms();
-        selectRoom(joinedCode);
+        const userName = profile?.name ?? user.displayName ?? "Estudante";
+        const userAvatar = profile?.avatar ?? user.photoURL ?? null;
+        const result = await requestJoinPrivateRoom({ userId: user.uid, userName, userAvatar, code });
         setJoinCode("");
-        if (!silent) toast.success("Você entrou na sala.");
+        if (result.status === "already-member") {
+          if (!silent) toast.info("Você já participa dessa sala. Use a lista lateral para entrar.");
+          return;
+        }
+
+        if (!silent) toast.success("Pedido enviado. Aguarde a aprovação do admin.");
       } catch (joinError) {
-        const message = joinError instanceof Error ? joinError.message : "Não foi possível entrar na sala.";
+        const message = joinError instanceof Error ? joinError.message : "Não foi possível enviar o pedido.";
         setError(message);
         toast.error(message);
       } finally {
         setJoining(false);
       }
     },
-    [firebaseReady, refreshDemoRooms, selectRoom, user],
+    [profile, user],
   );
 
   useEffect(() => {
@@ -136,6 +154,15 @@ export function GlobalChat() {
   }, []);
 
   useEffect(() => {
+    if (normalizedInitialRoomId) {
+      setActiveRoomId(normalizedInitialRoomId);
+      return;
+    }
+
+    if (lobbyOnly) setActiveRoomId(null);
+  }, [lobbyOnly, normalizedInitialRoomId]);
+
+  useEffect(() => {
     if (!user?.uid) {
       setRooms([]);
       setLoadingRooms(false);
@@ -143,12 +170,6 @@ export function GlobalChat() {
     }
 
     setLoadingRooms(true);
-
-    if (!firebaseReady) {
-      setRooms(listDemoRooms(user.uid));
-      setLoadingRooms(false);
-      return;
-    }
 
     return listenUserRooms(
       user.uid,
@@ -161,26 +182,16 @@ export function GlobalChat() {
         setLoadingRooms(false);
       },
     );
-  }, [firebaseReady, user?.uid]);
+  }, [user?.uid]);
 
   useEffect(() => {
-    if (!user || !inviteCode || handledInviteCode === inviteCode) return;
-
-    setHandledInviteCode(inviteCode);
-    void joinRoomByCode(inviteCode, true);
-  }, [handledInviteCode, inviteCode, joinRoomByCode, user]);
-
-  useEffect(() => {
+    if (loadingRooms || normalizedInitialRoomId) return;
     if (activeRoomId && rooms.some((room) => room.id === activeRoomId)) return;
-    if (inviteCode && rooms.some((room) => room.id === inviteCode)) {
-      setActiveRoomId(inviteCode);
-      return;
-    }
-    if (!activeRoomId && rooms[0]) setActiveRoomId(rooms[0].id);
-  }, [activeRoomId, inviteCode, rooms]);
+    if (activeRoomId) setActiveRoomId(null);
+  }, [activeRoomId, loadingRooms, normalizedInitialRoomId, rooms]);
 
   useEffect(() => {
-    if (!activeRoomId) {
+    if (!activeMessageRoomId) {
       setMessages([]);
       setLoadingMessages(false);
       return;
@@ -188,14 +199,8 @@ export function GlobalChat() {
 
     setLoadingMessages(true);
 
-    if (!firebaseReady) {
-      setMessages(listDemoRoomMessages(activeRoomId));
-      setLoadingMessages(false);
-      return;
-    }
-
     return listenRoomMessages(
-      activeRoomId,
+      activeMessageRoomId,
       (items) => {
         setMessages(items);
         setLoadingMessages(false);
@@ -205,7 +210,7 @@ export function GlobalChat() {
         setLoadingMessages(false);
       },
     );
-  }, [activeRoomId, firebaseReady]);
+  }, [activeMessageRoomId]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -223,11 +228,9 @@ export function GlobalChat() {
         ownerName: profile?.name ?? user.displayName ?? "Estudante",
         name: roomName,
       };
-      const code = firebaseReady ? await createPrivateRoom(roomInput) : createDemoRoom(roomInput);
-      if (!firebaseReady) refreshDemoRooms();
+      const code = await createPrivateRoom(roomInput);
       setRoomName("Sala de estudos");
-      selectRoom(code);
-      toast.success(testMode ? "Sala de teste criada." : "Sala privada criada.");
+      toast.success(`Sala privada criada: ${code}`);
     } catch (createError) {
       const message = createError instanceof Error ? createError.message : "Não foi possível criar a sala.";
       setError(message);
@@ -252,13 +255,7 @@ export function GlobalChat() {
         content: trimmedContent,
         attachment,
       };
-      if (firebaseReady) {
-        await sendRoomMessage(activeRoom.id, messageInput);
-      } else {
-        sendDemoRoomMessage(activeRoom.id, messageInput);
-        refreshDemoRooms();
-        setMessages(listDemoRoomMessages(activeRoom.id));
-      }
+      await sendRoomMessage(activeRoom.id, messageInput);
       setContent("");
       setAttachment(null);
     } catch (messageError) {
@@ -267,6 +264,52 @@ export function GlobalChat() {
       toast.error(message);
     } finally {
       setSending(false);
+    }
+  };
+
+  const reviewRequest = async (requestUserId: string, action: "approve" | "reject") => {
+    if (!activeRoom) return;
+
+    setReviewingRequestId(requestUserId);
+    setError(null);
+
+    try {
+      if (action === "approve") {
+        await approveRoomJoinRequest({ roomId: activeRoom.id, requestUserId });
+      } else {
+        await rejectRoomJoinRequest({ roomId: activeRoom.id, requestUserId });
+      }
+      toast.success(action === "approve" ? "Entrada aprovada." : "Pedido recusado.");
+    } catch (reviewError) {
+      const message = reviewError instanceof Error ? reviewError.message : "Não foi possível revisar o pedido.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setReviewingRequestId(null);
+    }
+  };
+
+  const removeRoom = async (room: PrivateRoom) => {
+    if (!user || user.uid !== room.ownerId) return;
+
+    setDeletingRoomId(room.id);
+    setError(null);
+
+    try {
+      await deletePrivateRoom(room.id);
+
+      if (activeRoomId === room.id) {
+        setActiveRoomId(null);
+        setMessages([]);
+        router.replace("/rooms");
+      }
+      toast.success("Sala excluida.");
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : "Nao foi possivel excluir a sala.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setDeletingRoomId(null);
     }
   };
 
@@ -304,54 +347,9 @@ export function GlobalChat() {
           </span>
           <div>
             <h1 className="text-base font-semibold">Salas privadas</h1>
-            <p className="text-sm text-muted-foreground">Crie uma sala ou entre usando um código de convite.</p>
-            {testMode ? <Badge variant="secondary" className="mt-2">modo teste local</Badge> : null}
+            <p className="text-sm text-muted-foreground">Salas aprovadas pelo admin aparecem aqui.</p>
           </div>
         </div>
-
-        <form
-          className="space-y-2 rounded-lg border bg-background p-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void createRoom();
-          }}
-        >
-          <p className="text-sm font-medium">Nova sala</p>
-          <Input
-            value={roomName}
-            maxLength={80}
-            onChange={(event) => setRoomName(event.target.value)}
-            placeholder="Ex: Turma DS 2026"
-          />
-          <Button type="submit" className="w-full" disabled={creating || !roomName.trim()}>
-            {creating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
-            Criar sala
-          </Button>
-        </form>
-
-        <form
-          className="space-y-2 rounded-lg border bg-background p-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void joinRoomByCode(joinCode);
-          }}
-        >
-          <p className="text-sm font-medium">Entrar por código</p>
-          <div className="relative">
-            <Hash className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-            <Input
-              value={joinCode}
-              maxLength={8}
-              onChange={(event) => setJoinCode(normalizeRoomCode(event.target.value))}
-              placeholder="CODIGO"
-              className="pl-9 uppercase"
-            />
-          </div>
-          <Button type="submit" variant="outline" className="w-full" disabled={joining || normalizeRoomCode(joinCode).length !== 8}>
-            {joining ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <DoorOpen className="h-4 w-4" aria-hidden="true" />}
-            Entrar na sala
-          </Button>
-        </form>
 
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
@@ -370,14 +368,12 @@ export function GlobalChat() {
               />
             ) : null}
             {rooms.map((room) => (
-              <button
+              <article
                 key={room.id}
-                type="button"
                 className={cn(
-                  "w-full rounded-md border p-3 text-left transition hover:bg-muted",
+                  "rounded-md border p-3 transition",
                   activeRoom?.id === room.id && "border-primary bg-primary/10",
                 )}
-                onClick={() => selectRoom(room.id)}
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="truncate text-sm font-medium">{room.name}</span>
@@ -386,7 +382,24 @@ export function GlobalChat() {
                 <p className="mt-1 truncate text-xs text-muted-foreground">
                   {room.lastMessageText ? `${room.lastMessageAuthorName}: ${room.lastMessageText}` : `Código ${room.code}`}
                 </p>
-              </button>
+                <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+                  <Button type="button" size="sm" variant={activeRoom?.id === room.id ? "default" : "outline"} onClick={() => selectRoom(room.id)}>
+                    <DoorOpen className="h-4 w-4" aria-hidden="true" />
+                    Entrar
+                  </Button>
+                  {room.ownerId === user?.uid ? (
+                    <DeleteConfirmCard
+                      title="Excluir sala"
+                      description={`A sala "${room.name}" sera apagada. Todos os participantes perderao o acesso e as conversas desta sala deixarao de aparecer.`}
+                      confirmLabel="Excluir sala"
+                      triggerTitle="Excluir sala"
+                      iconOnly
+                      loading={deletingRoomId === room.id}
+                      onConfirm={() => removeRoom(room)}
+                    />
+                  ) : null}
+                </div>
+              </article>
             ))}
           </div>
         </div>
@@ -491,13 +504,98 @@ export function GlobalChat() {
               <p className="mt-2 text-right text-xs text-muted-foreground">{content.length}/1000</p>
             </div>
           </>
+        ) : roomUnavailable ? (
+          <div className="flex flex-1 items-center justify-center p-6">
+            <div className="w-full max-w-md text-center">
+              <EmptyState
+                icon={LockKeyhole}
+                title="Sala indisponivel"
+                description="Essa sala ainda nao esta liberada para sua conta. Entre pelo codigo no lobby e aguarde a aprovacao do admin."
+              />
+              <Button asChild className="mt-4">
+                <Link href="/rooms">Voltar para minhas salas</Link>
+              </Button>
+            </div>
+          </div>
         ) : (
           <div className="flex flex-1 items-center justify-center p-6">
-            <EmptyState
-              icon={MessagesSquare}
-              title="Escolha uma sala"
-              description="Crie uma sala privada ou entre por código para liberar a conversa."
-            />
+            <div className="w-full max-w-xl space-y-5">
+              <div className="text-center">
+                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <Hash className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <h2 className="mt-4 text-xl font-semibold tracking-normal">Entrar em uma sala privada</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Digite o código da sala e envie um pedido. A sala aparece na lateral depois que o admin aprovar.
+                </p>
+              </div>
+
+              <form
+                className="rounded-lg border bg-background p-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void requestRoomAccess(joinCode);
+                }}
+              >
+                <label htmlFor="room-code" className="text-sm font-medium">
+                  Código da sala
+                </label>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                  <div className="relative flex-1">
+                    <Hash className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                    <Input
+                      id="room-code"
+                      value={joinCode}
+                      maxLength={8}
+                      onChange={(event) => setJoinCode(normalizeRoomCode(event.target.value))}
+                      placeholder="CODIGO"
+                      className="pl-9 uppercase"
+                    />
+                  </div>
+                  <Button type="submit" disabled={joining || normalizeRoomCode(joinCode).length !== 8}>
+                    {joining ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
+                    Enviar pedido
+                  </Button>
+                </div>
+                {inviteCode ? (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Código do link preenchido. Envie o pedido para aguardar a aprovação.
+                  </p>
+                ) : null}
+              </form>
+
+              <form
+                className="rounded-lg border bg-card p-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void createRoom();
+                }}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold">Criar sala como admin</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Você vira admin da sala e aprova quem pedir entrada pelo código.
+                    </p>
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        value={roomName}
+                        maxLength={80}
+                        onChange={(event) => setRoomName(event.target.value)}
+                        placeholder="Ex: Turma DS 2026"
+                      />
+                      <Button type="submit" variant="outline" disabled={creating || !roomName.trim()}>
+                        {creating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
+                        Criar
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </div>
@@ -529,17 +627,84 @@ export function GlobalChat() {
                 Copiar link
               </Button>
             ) : null}
+            {activeRoomOwner ? (
+              <DeleteConfirmCard
+                title="Excluir sala"
+                description={`A sala "${activeRoom.name}" sera apagada. Todos os participantes perderao o acesso e as conversas desta sala deixarao de aparecer.`}
+                confirmLabel="Excluir sala"
+                triggerLabel="Excluir sala"
+                triggerTitle="Excluir sala"
+                className="w-full"
+                loading={deletingRoomId === activeRoom.id}
+                onConfirm={() => removeRoom(activeRoom)}
+              />
+            ) : null}
+          </div>
+        ) : null}
+
+        {activeRoom && activeRoomOwner ? (
+          <div className="space-y-3 rounded-lg border bg-background p-4">
+            <div>
+              <h3 className="text-sm font-semibold">Pedidos de entrada</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Aprove para a sala aparecer na lista do estudante.
+              </p>
+            </div>
+            {activeRoom.pendingRequests.length ? (
+              <div className="space-y-2">
+                {activeRoom.pendingRequests.map((request) => (
+                  <div key={request.userId} className="rounded-md border bg-card p-3">
+                    <div className="flex items-center gap-3">
+                      <UserAvatar src={request.avatar} name={request.name} className="h-8 w-8" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{request.name}</p>
+                        <p className="text-xs text-muted-foreground">{formatRelativeDate(request.requestedAt)}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={reviewingRequestId === request.userId}
+                        onClick={() => void reviewRequest(request.userId, "approve")}
+                      >
+                        {reviewingRequestId === request.userId ? (
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <UserCheck className="h-4 w-4" aria-hidden="true" />
+                        )}
+                        Aprovar
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={reviewingRequestId === request.userId}
+                        onClick={() => void reviewRequest(request.userId, "reject")}
+                      >
+                        <UserX className="h-4 w-4" aria-hidden="true" />
+                        Recusar
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                Nenhum pedido pendente.
+              </p>
+            )}
           </div>
         ) : null}
 
         <div className="space-y-3 text-sm text-muted-foreground">
           <div className="flex gap-3">
             <UsersRound className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-            <p>Somente quem tem o código ou link consegue entrar na sala.</p>
+            <p>Quem tem o código ou link pode pedir entrada na sala.</p>
           </div>
           <div className="flex gap-3">
             <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-            <p>As mensagens ficam separadas por sala e só aparecem para participantes.</p>
+            <p>As mensagens só aparecem depois que o admin aprova o participante.</p>
           </div>
           <div className="flex gap-3">
             <Paperclip className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />

@@ -19,11 +19,11 @@ export function middleware(request: NextRequest) {
   }
 
   if (startsWithAny(pathname, AUTH_ROUTES) && hasSession) {
-    const dashboardUrl = request.nextUrl.clone();
-    dashboardUrl.pathname = "/dashboard";
-    dashboardUrl.search = "";
+    const roomsUrl = request.nextUrl.clone();
+    roomsUrl.pathname = "/rooms";
+    roomsUrl.search = "";
 
-    return NextResponse.redirect(dashboardUrl);
+    return NextResponse.redirect(roomsUrl);
   }
 
   return NextResponse.next();

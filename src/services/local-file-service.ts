@@ -94,6 +94,10 @@ export async function getLocalFile(localFileId: string) {
   return record ?? null;
 }
 
+export async function deleteLocalFile(localFileId: string) {
+  await withStore<undefined>("readwrite", (store) => store.delete(localFileId));
+}
+
 export async function openAcademicUpload(upload: AcademicUpload) {
   if (upload.storageProvider === "url" || upload.fileType === "link") {
     window.open(upload.fileUrl, "_blank", "noopener,noreferrer");

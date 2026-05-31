@@ -12,7 +12,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { collections } from "@/firebase/collections";
-import { getClientFirestore } from "@/firebase/client";
+import { getClientFirestore, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
 import { sanitizeText } from "@/lib/sanitize";
 import { createActivityLog } from "@/services/activity-service";
 import type { Comment } from "@/types/comment";
@@ -25,6 +25,8 @@ export async function createComment(input: {
   authorAvatar: string | null;
   content: string;
 }) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
   await addDoc(collection(getClientFirestore(), collections.comments), {
     ...input,
     content: sanitizeText(input.content, 1000),
@@ -43,6 +45,11 @@ export function listenComments(
   onData: (comments: Comment[]) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
+  if (!isFirebaseConfigured) {
+    onData([]);
+    return () => undefined;
+  }
+
   const commentsQuery = query(
     collection(getClientFirestore(), collections.comments),
     where("uploadId", "==", uploadId),

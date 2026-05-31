@@ -3,6 +3,8 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
+  doc,
   limit,
   onSnapshot,
   orderBy,
@@ -12,9 +14,9 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { collections } from "@/firebase/collections";
-import { getClientFirestore } from "@/firebase/client";
+import { getClientFirestore, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
 import { sanitizeFileName, sanitizeText } from "@/lib/sanitize";
-import { createLocalFileUrl } from "@/services/local-file-service";
+import { createLocalFileUrl, deleteLocalFile } from "@/services/local-file-service";
 import { createActivityLog } from "@/services/activity-service";
 import type { AcademicUpload, CreateUploadInput, FileKind } from "@/types/upload";
 import { classifyFile } from "@/utils/file";
@@ -34,6 +36,8 @@ type SaveLinkInput = {
 };
 
 export async function saveUploadMetadata(input: SaveUploadInput) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
   const shareId = crypto.randomUUID();
   const safeFileName = sanitizeFileName(input.file.name);
   const payload = {
@@ -67,6 +71,8 @@ export async function saveUploadMetadata(input: SaveUploadInput) {
 }
 
 export async function saveLinkUpload(input: SaveLinkInput) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
   const parsedUrl = new URL(input.url);
   const shareId = crypto.randomUUID();
   const payload = {
@@ -99,12 +105,27 @@ export async function saveLinkUpload(input: SaveLinkInput) {
   return uploadRef.id;
 }
 
+export async function deleteAcademicUpload(upload: AcademicUpload) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
+  await deleteDoc(doc(getClientFirestore(), collections.uploads, upload.id));
+
+  if (upload.localFileId) {
+    await deleteLocalFile(upload.localFileId).catch(() => undefined);
+  }
+}
+
 export function listenUserUploads(
   userId: string,
   onData: (uploads: AcademicUpload[]) => void,
   onError: (error: Error) => void,
   resultLimit = 40,
 ): Unsubscribe {
+  if (!isFirebaseConfigured) {
+    onData([]);
+    return () => undefined;
+  }
+
   const uploadsQuery = query(
     collection(getClientFirestore(), collections.uploads),
     where("userId", "==", userId),
@@ -124,6 +145,11 @@ export function listenSharedUploadByShareId(
   onData: (upload: AcademicUpload | null) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
+  if (!isFirebaseConfigured) {
+    onData(null);
+    return () => undefined;
+  }
+
   const uploadsQuery = query(
     collection(getClientFirestore(), collections.uploads),
     where("shareId", "==", shareId),

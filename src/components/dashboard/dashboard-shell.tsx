@@ -27,11 +27,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { useUiStore } from "@/store/ui-store";
 
 const navigation = [
+  { href: "/rooms", label: "Salas privadas", icon: LockKeyhole },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/uploads", label: "Uploads", icon: UploadCloud },
   { href: "/editor", label: "Editor", icon: Code2 },
   { href: "/chat", label: "IA", icon: Bot },
-  { href: "/rooms", label: "Salas privadas", icon: LockKeyhole },
   { href: "/shared", label: "Compartilhar", icon: Share2 },
 ];
 
@@ -85,7 +85,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         )}
       >
         <div className="flex h-16 items-center justify-between border-b px-4">
-          <Link href="/dashboard" className="flex items-center gap-3" onClick={() => setSidebarOpen(false)}>
+          <Link href="/rooms" className="flex items-center gap-3" onClick={() => setSidebarOpen(false)}>
             <span className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
               SD
             </span>

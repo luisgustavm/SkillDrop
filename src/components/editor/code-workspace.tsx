@@ -11,7 +11,6 @@ import {
   Minimize2,
   Plus,
   Save,
-  Trash2,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -21,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DeleteConfirmCard } from "@/components/shared/delete-confirm-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { UserAvatar } from "@/components/shared/user-avatar";
@@ -153,8 +153,6 @@ export function CodeWorkspace() {
   };
 
   const removeSnippet = async (snippet: CodeSnippet) => {
-    if (!window.confirm(`Excluir "${snippet.title}"?`)) return;
-
     setDeletingId(snippet.id);
     setError(null);
 
@@ -333,20 +331,16 @@ export function CodeWorkspace() {
                       <Button type="button" variant="outline" size="icon" title="Editar código" onClick={() => editSnippet(snippet)}>
                         <Edit3 className="h-4 w-4" aria-hidden="true" />
                       </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        title="Excluir código"
-                        disabled={deletingId === snippet.id}
-                        onClick={() => void removeSnippet(snippet)}
-                      >
-                        {deletingId === snippet.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        )}
-                      </Button>
+                      <DeleteConfirmCard
+                        title="Excluir codigo"
+                        description={`O codigo "${snippet.title}" sera removido da lista de codigos publicados.`}
+                        confirmLabel="Excluir codigo"
+                        triggerTitle="Excluir codigo"
+                        triggerVariant="outline"
+                        iconOnly
+                        loading={deletingId === snippet.id}
+                        onConfirm={() => removeSnippet(snippet)}
+                      />
                     </>
                   ) : null}
                 </div>

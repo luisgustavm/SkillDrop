@@ -61,6 +61,7 @@ service cloud.firestore {
     function isValidRoom(data) {
       return data.keys().hasOnly([
           "code", "name", "ownerId", "ownerName", "memberIds", "memberCount",
+          "pendingRequests", "pendingRequestUserIds",
           "lastMessageText", "lastMessageAuthorName", "lastMessageAt", "createdAt", "updatedAt"
         ])
         && data.code is string
@@ -75,6 +76,8 @@ service cloud.firestore {
         && data.memberIds is list
         && data.memberCount is int
         && data.memberCount >= 1
+        && data.pendingRequests is list
+        && data.pendingRequestUserIds is list
         && data.lastMessageText is string
         && data.lastMessageText.size() <= 1000
         && data.lastMessageAuthorName is string
@@ -86,13 +89,27 @@ service cloud.firestore {
         && request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.memberIds;
     }
 
-    function isJoiningRoom() {
+    function isRequestingRoomAccess() {
       return signedIn()
         && !(request.auth.uid in resource.data.memberIds)
-        && request.auth.uid in request.resource.data.memberIds
-        && request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1
-        && request.resource.data.memberCount == resource.data.memberCount + 1
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["memberIds", "memberCount", "updatedAt"]);
+        && !(request.auth.uid in resource.data.pendingRequestUserIds)
+        && request.auth.uid in request.resource.data.pendingRequestUserIds
+        && request.resource.data.pendingRequestUserIds.size() == resource.data.pendingRequestUserIds.size() + 1
+        && request.resource.data.memberIds == resource.data.memberIds
+        && request.resource.data.memberCount == resource.data.memberCount
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "pendingRequests", "pendingRequestUserIds", "updatedAt"
+        ]);
+    }
+
+    function isOwnerRoomUpdate() {
+      return owns(resource.data.ownerId)
+        && request.resource.data.code == resource.data.code
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name", "pendingRequests", "pendingRequestUserIds", "memberIds", "memberCount", "updatedAt"
+        ]);
     }
 
     function isMemberRoomUpdate() {
@@ -179,7 +196,7 @@ service cloud.firestore {
         && request.resource.data.memberIds.size() == 1
         && request.resource.data.memberIds[0] == request.auth.uid
         && isValidRoom(request.resource.data);
-      allow update: if isValidRoom(request.resource.data) && (isJoiningRoom() || isMemberRoomUpdate());
+      allow update: if isValidRoom(request.resource.data) && (isRequestingRoomAccess() || isOwnerRoomUpdate() || isMemberRoomUpdate());
       allow delete: if owns(resource.data.ownerId);
 
       match /messages/{messageId} {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, FlaskConical, Globe, KeyRound, Loader2, LogIn, Mail, UserPlus } from "lucide-react";
+import { ArrowLeft, Globe, KeyRound, Loader2, LogIn, Mail, UserPlus } from "lucide-react";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -31,7 +31,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 }
 
 function LoginForm() {
-  const { login, loginGoogle, loginGuest, loginTest, loading, error, user, firebaseReady, testModeAvailable } = useAuth();
+  const { login, loginGoogle, loginGuest, loading, error, user, firebaseReady } = useAuth();
   const router = useRouter();
   const form = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema), defaultValues: { email: "", password: "" } });
 
@@ -40,7 +40,7 @@ function LoginForm() {
   return (
     <AuthFrame
       title="Entrar no SkillDrop"
-      description="Acesse sua área acadêmica."
+      description="Acesse sua area academica."
       footer={
         <>
           Novo por aqui?{" "}
@@ -50,22 +50,12 @@ function LoginForm() {
         </>
       }
     >
-      {!firebaseReady && testModeAvailable ? (
-        <TestModePanel
-          onStart={async () => {
-            await loginTest();
-            toast.success("Modo teste ativado.");
-            router.replace(getAuthRedirectPath());
-          }}
-        />
-      ) : null}
-
       <form
         className="space-y-4"
         onSubmit={form.handleSubmit(async (values) => {
           try {
             await login(values.email, values.password);
-            toast.success("Sessão iniciada.");
+            toast.success("Sessao iniciada.");
             router.replace(getAuthRedirectPath());
           } catch (authError) {
             showAuthActionError(authError);
@@ -94,7 +84,7 @@ function LoginForm() {
         }}
         onGuest={async () => {
           await loginGuest();
-          toast.success("Sessão convidada criada.");
+          toast.success("Sessao convidada criada.");
           router.replace(getAuthRedirectPath());
         }}
       />
@@ -110,7 +100,7 @@ function LoginForm() {
 }
 
 function RegisterForm() {
-  const { register, loginGoogle, loginGuest, loginTest, loading, error, user, firebaseReady, testModeAvailable } = useAuth();
+  const { register, loginGoogle, loginGuest, loading, error, user, firebaseReady } = useAuth();
   const router = useRouter();
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -122,26 +112,16 @@ function RegisterForm() {
   return (
     <AuthFrame
       title="Criar conta"
-      description="Organize entregas, links e códigos em um só lugar."
+      description="Organize entregas, links e codigos em um so lugar."
       footer={
         <>
-          Já tem conta?{" "}
+          Ja tem conta?{" "}
           <Link href="/login" className="font-medium text-primary hover:underline">
             Entrar
           </Link>
         </>
       }
     >
-      {!firebaseReady && testModeAvailable ? (
-        <TestModePanel
-          onStart={async () => {
-            await loginTest();
-            toast.success("Modo teste ativado.");
-            router.replace(getAuthRedirectPath());
-          }}
-        />
-      ) : null}
-
       <form
         className="space-y-4"
         onSubmit={form.handleSubmit(async (values) => {
@@ -179,7 +159,7 @@ function RegisterForm() {
         }}
         onGuest={async () => {
           await loginGuest();
-          toast.success("Sessão convidada criada.");
+          toast.success("Sessao convidada criada.");
           router.replace(getAuthRedirectPath());
         }}
       />
@@ -209,7 +189,7 @@ function ResetPasswordForm() {
         onSubmit={form.handleSubmit(async (values) => {
           try {
             await resetPassword(values.email);
-            toast.success("E-mail de recuperação enviado.");
+            toast.success("E-mail de recuperacao enviado.");
           } catch (authError) {
             showAuthActionError(authError);
           }
@@ -225,28 +205,6 @@ function ResetPasswordForm() {
         </Button>
       </form>
     </AuthFrame>
-  );
-}
-
-function TestModePanel({ onStart }: { onStart: () => Promise<void> }) {
-  return (
-    <div className="rounded-lg border border-primary/25 bg-primary/10 p-4 text-sm">
-      <div className="flex gap-3">
-        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <FlaskConical className="h-4 w-4" aria-hidden="true" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="font-medium">Teste local disponível</p>
-          <p className="mt-1 text-muted-foreground">
-            Use uma sessão de demonstração para testar as telas e salas privadas sem configurar o Firebase local.
-          </p>
-          <Button type="button" size="sm" className="mt-3" onClick={() => void onStart().catch(showAuthActionError)}>
-            <LogIn className="h-4 w-4" aria-hidden="true" />
-            Entrar no modo teste
-          </Button>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -279,7 +237,7 @@ function AuthAlternatives({
 }
 
 function showAuthActionError(error: unknown) {
-  toast.error(error instanceof Error ? error.message : "Não foi possível concluir a autenticação.");
+  toast.error(error instanceof Error ? error.message : "Nao foi possivel concluir a autenticacao.");
 }
 
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
@@ -334,10 +292,10 @@ function useRedirectWhenAuthenticated(authenticated: boolean) {
 }
 
 function getAuthRedirectPath() {
-  if (typeof window === "undefined") return "/dashboard";
+  if (typeof window === "undefined") return "/rooms";
 
   const nextPath = new URLSearchParams(window.location.search).get("next");
   if (nextPath?.startsWith("/") && !nextPath.startsWith("//")) return nextPath;
 
-  return "/dashboard";
+  return "/rooms";
 }

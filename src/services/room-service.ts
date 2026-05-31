@@ -4,6 +4,7 @@ import {
   addDoc,
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   increment,
@@ -14,14 +15,15 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
   where,
   type Unsubscribe,
 } from "firebase/firestore";
 import { collections } from "@/firebase/collections";
-import { getClientFirestore } from "@/firebase/client";
+import { getClientFirestore, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
 import { sanitizeText } from "@/lib/sanitize";
-import type { GlobalChatAttachment, PrivateRoom, RoomMessage } from "@/types/chat";
+import type { GlobalChatAttachment, PrivateRoom, RoomJoinRequest, RoomMessage } from "@/types/chat";
 import { toDate } from "@/utils/date";
 
 const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -33,9 +35,21 @@ type CreateRoomInput = {
   name: string;
 };
 
-type JoinRoomInput = {
+type RequestJoinRoomInput = {
   userId: string;
+  userName: string;
+  userAvatar: string | null;
   code: string;
+};
+
+type RequestJoinRoomResult = {
+  code: string;
+  status: "already-member" | "pending" | "created";
+};
+
+type ReviewJoinRequestInput = {
+  roomId: string;
+  requestUserId: string;
 };
 
 type SendRoomMessageInput = {
@@ -80,6 +94,8 @@ async function createUniqueRoomCode() {
 }
 
 export async function createPrivateRoom(input: CreateRoomInput) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
   const code = await createUniqueRoomCode();
   const name = sanitizeText(input.name, 80) || "Sala de estudos";
   const ownerName = sanitizeText(input.ownerName, 80) || "Estudante";
@@ -91,6 +107,8 @@ export async function createPrivateRoom(input: CreateRoomInput) {
     ownerName,
     memberIds: [input.userId],
     memberCount: 1,
+    pendingRequests: [],
+    pendingRequestUserIds: [],
     lastMessageText: "",
     lastMessageAuthorName: "",
     lastMessageAt: null,
@@ -101,12 +119,22 @@ export async function createPrivateRoom(input: CreateRoomInput) {
   return code;
 }
 
-export async function joinPrivateRoom(input: JoinRoomInput) {
+export async function deletePrivateRoom(roomId: string) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
+  await deleteDoc(roomDocument(roomId));
+}
+
+export async function requestJoinPrivateRoom(input: RequestJoinRoomInput): Promise<RequestJoinRoomResult> {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
   const code = normalizeRoomCode(input.code);
 
   if (code.length !== ROOM_CODE_LENGTH) {
     throw new Error("Informe um código de sala válido.");
   }
+
+  let status: "already-member" | "pending" | "created" = "created";
 
   await runTransaction(getClientFirestore(), async (transaction) => {
     const roomRef = roomDocument(code);
@@ -118,17 +146,81 @@ export async function joinPrivateRoom(input: JoinRoomInput) {
 
     const data = snapshot.data();
     const memberIds = Array.isArray(data.memberIds) ? data.memberIds.map(String) : [];
+    const pendingRequests = Array.isArray(data.pendingRequests)
+      ? data.pendingRequests.map((item) => item as Record<string, unknown>)
+      : [];
 
-    if (memberIds.includes(input.userId)) return;
+    if (memberIds.includes(input.userId)) {
+      status = "already-member";
+      return;
+    }
+
+    if (pendingRequests.some((request) => request.userId === input.userId)) {
+      status = "pending";
+      return;
+    }
 
     transaction.update(roomRef, {
-      memberIds: arrayUnion(input.userId),
-      memberCount: increment(1),
+      pendingRequests: arrayUnion({
+        userId: input.userId,
+        name: sanitizeText(input.userName, 80) || "Estudante",
+        avatar: input.userAvatar,
+        requestedAt: Timestamp.now(),
+      }),
+      pendingRequestUserIds: arrayUnion(input.userId),
       updatedAt: serverTimestamp(),
     });
   });
 
-  return code;
+  return { code, status };
+}
+
+export async function approveRoomJoinRequest(input: ReviewJoinRequestInput) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
+  await reviewRoomJoinRequest(input, "approve");
+}
+
+export async function rejectRoomJoinRequest(input: ReviewJoinRequestInput) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
+  await reviewRoomJoinRequest(input, "reject");
+}
+
+async function reviewRoomJoinRequest(input: ReviewJoinRequestInput, action: "approve" | "reject") {
+  await runTransaction(getClientFirestore(), async (transaction) => {
+    const roomRef = roomDocument(input.roomId);
+    const snapshot = await transaction.get(roomRef);
+
+    if (!snapshot.exists()) {
+      throw new Error("Sala não encontrada.");
+    }
+
+    const data = snapshot.data();
+    const pendingRequests = Array.isArray(data.pendingRequests)
+      ? data.pendingRequests.map((item) => item as Record<string, unknown>)
+      : [];
+    const pendingRequestUserIds = Array.isArray(data.pendingRequestUserIds)
+      ? data.pendingRequestUserIds.map(String)
+      : [];
+    const request = pendingRequests.find((item) => item.userId === input.requestUserId);
+
+    if (!request) return;
+
+    const nextPendingRequests = pendingRequests.filter((item) => item.userId !== input.requestUserId);
+    const nextPendingRequestUserIds = pendingRequestUserIds.filter((userId) => userId !== input.requestUserId);
+    transaction.update(roomRef, {
+      pendingRequests: nextPendingRequests,
+      pendingRequestUserIds: nextPendingRequestUserIds,
+      ...(action === "approve"
+        ? {
+            memberIds: arrayUnion(input.requestUserId),
+            memberCount: increment(1),
+          }
+        : {}),
+      updatedAt: serverTimestamp(),
+    });
+  });
 }
 
 export function listenUserRooms(
@@ -137,6 +229,11 @@ export function listenUserRooms(
   onError: (error: Error) => void,
   resultLimit = 30,
 ): Unsubscribe {
+  if (!isFirebaseConfigured) {
+    onData([]);
+    return () => undefined;
+  }
+
   const roomsQuery = query(
     roomsCollection(),
     where("memberIds", "array-contains", userId),
@@ -157,6 +254,11 @@ export function listenRoomMessages(
   onError: (error: Error) => void,
   resultLimit = 80,
 ): Unsubscribe {
+  if (!isFirebaseConfigured) {
+    onData([]);
+    return () => undefined;
+  }
+
   const messagesQuery = query(roomMessagesCollection(roomId), orderBy("createdAt", "desc"), limit(resultLimit));
 
   return onSnapshot(
@@ -167,6 +269,8 @@ export function listenRoomMessages(
 }
 
 export async function sendRoomMessage(roomId: string, input: SendRoomMessageInput) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
   const content = sanitizeText(input.content, 1000);
   const attachment = input.attachment ?? null;
 
@@ -215,11 +319,23 @@ function mapRoom(id: string, data: Record<string, unknown>): PrivateRoom {
     ownerName: String(data.ownerName ?? "Estudante"),
     memberIds: Array.isArray(data.memberIds) ? data.memberIds.map(String) : [],
     memberCount: Number(data.memberCount ?? 1),
+    pendingRequests: Array.isArray(data.pendingRequests) ? data.pendingRequests.map(mapJoinRequest) : [],
     lastMessageText: String(data.lastMessageText ?? ""),
     lastMessageAuthorName: String(data.lastMessageAuthorName ?? ""),
     lastMessageAt: toDate(data.lastMessageAt),
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
+  };
+}
+
+function mapJoinRequest(data: unknown): RoomJoinRequest {
+  const request = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+
+  return {
+    userId: String(request.userId ?? ""),
+    name: String(request.name ?? "Estudante"),
+    avatar: typeof request.avatar === "string" ? request.avatar : null,
+    requestedAt: toDate(request.requestedAt),
   };
 }
 

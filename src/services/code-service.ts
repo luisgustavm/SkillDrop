@@ -14,7 +14,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { collections } from "@/firebase/collections";
-import { getClientFirestore } from "@/firebase/client";
+import { getClientFirestore, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
 import { sanitizeText } from "@/lib/sanitize";
 import type { CodeLanguage, CodeSnippet, SaveCodeSnippetInput } from "@/types/code";
 import { toDate } from "@/utils/date";
@@ -50,6 +50,8 @@ function normalizeCodeInput(input: SaveCodeSnippetInput) {
 }
 
 export async function createCodeSnippet(input: SaveCodeSnippetInput) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
   const payload = normalizeCodeInput(input);
 
   const snippetRef = await addDoc(collection(getClientFirestore(), collections.codeSnippets), {
@@ -62,6 +64,8 @@ export async function createCodeSnippet(input: SaveCodeSnippetInput) {
 }
 
 export async function updateCodeSnippet(snippetId: string, input: SaveCodeSnippetInput) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
   const payload = normalizeCodeInput(input);
 
   await updateDoc(doc(getClientFirestore(), collections.codeSnippets, snippetId), {
@@ -71,6 +75,8 @@ export async function updateCodeSnippet(snippetId: string, input: SaveCodeSnippe
 }
 
 export async function deleteCodeSnippet(snippetId: string) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
   await deleteDoc(doc(getClientFirestore(), collections.codeSnippets, snippetId));
 }
 
@@ -79,6 +85,11 @@ export function listenCodeSnippets(
   onError: (error: Error) => void,
   resultLimit = 80,
 ): Unsubscribe {
+  if (!isFirebaseConfigured) {
+    onData([]);
+    return () => undefined;
+  }
+
   const snippetsQuery = query(
     collection(getClientFirestore(), collections.codeSnippets),
     orderBy("createdAt", "desc"),

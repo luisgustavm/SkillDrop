@@ -16,8 +16,6 @@ import type { SkillDropUser } from "@/types/user";
 
 type AuthContextValue = {
   firebaseReady: boolean;
-  testModeAvailable: boolean;
-  testMode: boolean;
   user: User | null;
   profile: SkillDropUser | null;
   loading: boolean;
@@ -26,7 +24,6 @@ type AuthContextValue = {
   register: (name: string, email: string, password: string) => Promise<void>;
   loginGoogle: () => Promise<void>;
   loginGuest: () => Promise<void>;
-  loginTest: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   getIdToken: () => Promise<string | null>;
@@ -34,7 +31,6 @@ type AuthContextValue = {
 
 const SESSION_COOKIE_NAME = "skilldrop_session";
 const ID_TOKEN_COOKIE_NAME = "skilldrop_id_token";
-const TEST_SESSION_STORAGE_KEY = "skilldrop_test_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const ID_TOKEN_MAX_AGE_SECONDS = 60 * 55;
 
@@ -76,59 +72,11 @@ function buildFallbackProfile(currentUser: User, displayName?: string): SkillDro
   };
 }
 
-function isLocalTestHost() {
-  if (typeof window === "undefined") return false;
-
-  return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
-}
-
-function buildTestUser(): User {
-  return {
-    uid: "local-test-user",
-    displayName: "Usuário de Teste",
-    email: "teste@skilldrop.local",
-    emailVerified: true,
-    phoneNumber: null,
-    photoURL: null,
-    isAnonymous: false,
-    providerData: [
-      {
-        providerId: "password",
-        uid: "local-test-user",
-        displayName: "Usuário de Teste",
-        email: "teste@skilldrop.local",
-        phoneNumber: null,
-        photoURL: null,
-      },
-    ],
-    providerId: "firebase",
-    metadata: {},
-    refreshToken: "local-test-refresh-token",
-    tenantId: null,
-    delete: async () => undefined,
-    getIdToken: async () => "local-test-token",
-    getIdTokenResult: async () =>
-      ({
-        token: "local-test-token",
-        authTime: new Date().toISOString(),
-        issuedAtTime: new Date().toISOString(),
-        expirationTime: new Date(Date.now() + ID_TOKEN_MAX_AGE_SECONDS * 1000).toISOString(),
-        signInProvider: "password",
-        signInSecondFactor: null,
-        claims: {},
-      }) as Awaited<ReturnType<User["getIdTokenResult"]>>,
-    reload: async () => undefined,
-    toJSON: () => ({ uid: "local-test-user" }),
-  } as User;
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<SkillDropUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [testModeAvailable, setTestModeAvailable] = useState(false);
-  const [testMode, setTestMode] = useState(false);
 
   const syncProfileInBackground = useCallback(async (currentUser: User, displayName?: string) => {
     try {
@@ -138,7 +86,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (loadedProfile) setProfile(loadedProfile);
     } catch {
       // Firestore can be unavailable while rules/indexes are being configured.
-      // Authentication should remain fast and usable even if profile sync fails.
     }
   }, []);
 
@@ -151,59 +98,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const applySession = useCallback((currentUser: User | null, displayName?: string) => {
-    if (!currentUser) {
-      setUser(null);
-      setProfile(null);
-      clearSessionCookies();
-      return;
-    }
-
-    setCookie(SESSION_COOKIE_NAME, "1", SESSION_MAX_AGE_SECONDS);
-    setUser(currentUser);
-    setProfile(buildFallbackProfile(currentUser, displayName));
-
-    void syncTokenCookieInBackground(currentUser);
-    void syncProfileInBackground(currentUser, displayName);
-  }, [syncProfileInBackground, syncTokenCookieInBackground]);
-
-  const applyTestSession = useCallback((enabled: boolean) => {
-    if (!enabled) {
-      setTestMode(false);
-      setUser(null);
-      setProfile(null);
-      clearSessionCookies();
-      localStorage.removeItem(TEST_SESSION_STORAGE_KEY);
-      return;
-    }
-
-    const testUser = buildTestUser();
-    setCookie(SESSION_COOKIE_NAME, "test", SESSION_MAX_AGE_SECONDS);
-    localStorage.setItem(TEST_SESSION_STORAGE_KEY, "1");
-    setTestMode(true);
-    setError(null);
-    setUser(testUser);
-    setProfile(buildFallbackProfile(testUser, "Usuário de Teste"));
-  }, []);
-
-  useEffect(() => {
-    if (!isFirebaseConfigured) {
-      const canUseTestMode = isLocalTestHost();
-      setTestModeAvailable(canUseTestMode);
-
-      if (canUseTestMode && localStorage.getItem(TEST_SESSION_STORAGE_KEY) === "1") {
-        applyTestSession(true);
-        setLoading(false);
+  const applySession = useCallback(
+    (currentUser: User | null, displayName?: string) => {
+      if (!currentUser) {
+        setUser(null);
+        setProfile(null);
+        clearSessionCookies();
         return;
       }
 
+      setCookie(SESSION_COOKIE_NAME, "1", SESSION_MAX_AGE_SECONDS);
+      setUser(currentUser);
+      setProfile(buildFallbackProfile(currentUser, displayName));
+
+      void syncTokenCookieInBackground(currentUser);
+      void syncProfileInBackground(currentUser, displayName);
+    },
+    [syncProfileInBackground, syncTokenCookieInBackground],
+  );
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) {
+      clearSessionCookies();
+      setUser(null);
+      setProfile(null);
       setLoading(false);
-      setError(canUseTestMode ? null : "Firebase não está configurado. Confira o arquivo .env.local.");
+      setError("Firebase nao esta configurado. Preencha as variaveis NEXT_PUBLIC_FIREBASE_* no Vercel.");
       return;
     }
-
-    setTestModeAvailable(false);
-    setTestMode(false);
 
     const auth = getClientAuth();
     const unsubscribe = onIdTokenChanged(auth, (currentUser) => {
@@ -221,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return unsubscribe;
-  }, [applySession, applyTestSession]);
+  }, [applySession]);
 
   const runAuthAction = useCallback(
     async (action: () => Promise<User>, displayName?: string) => {
@@ -260,8 +182,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       firebaseReady: isFirebaseConfigured,
-      testModeAvailable,
-      testMode,
       user,
       profile,
       loading,
@@ -270,29 +190,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register: (name, email, password) => runAuthAction(() => registerWithEmail(name, email, password), name),
       loginGoogle: () => runAuthAction(loginWithGoogle),
       loginGuest: () => runAuthAction(loginAsGuest),
-      loginTest: async () => {
-        if (!testModeAvailable) {
-          throw new Error("Modo teste disponível apenas no localhost sem Firebase configurado.");
-        }
-
-        setLoading(true);
-        try {
-          applyTestSession(true);
-        } finally {
-          setLoading(false);
-        }
-      },
       resetPassword: (email) => runVoidAuthAction(() => recoverPassword(email)),
       logout: () =>
-        testMode
-          ? Promise.resolve(applyTestSession(false))
-          : runVoidAuthAction(async () => {
-              await logoutUser();
-              applySession(null);
-            }),
+        runVoidAuthAction(async () => {
+          await logoutUser();
+          applySession(null);
+        }),
       getIdToken: () => user?.getIdToken() ?? Promise.resolve(null),
     }),
-    [applySession, applyTestSession, error, loading, profile, runAuthAction, runVoidAuthAction, testMode, testModeAvailable, user],
+    [applySession, error, loading, profile, runAuthAction, runVoidAuthAction, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

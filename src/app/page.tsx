@@ -34,7 +34,7 @@ export default function HomePage() {
         <div className="absolute inset-0 hidden lg:block" aria-hidden="true">
           <ProductScene />
         </div>
-        <div className="absolute inset-y-0 left-0 z-10 hidden w-[56%] bg-gradient-to-r from-card via-card/95 to-card/10 lg:block" aria-hidden="true" />
+        <div className="absolute inset-y-0 left-0 z-10 hidden w-[64%] bg-gradient-to-r from-card via-card/95 to-card/10 lg:block" aria-hidden="true" />
 
         <header className="relative z-20 mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-3">
@@ -54,12 +54,12 @@ export default function HomePage() {
         </header>
 
         <div className="relative z-20 mx-auto flex min-h-[82svh] max-w-7xl flex-col justify-center px-4 pb-16 pt-10 sm:px-6 lg:px-8">
-          <div className="max-w-xl">
+          <div className="max-w-lg">
             <Badge variant="secondary" className="mb-5">
               Plataforma acadêmica com salas privadas
             </Badge>
             <h1 className="text-4xl font-semibold tracking-normal sm:text-5xl lg:text-6xl">SkillDrop</h1>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
+            <p className="mt-5 max-w-lg text-base leading-7 text-muted-foreground sm:text-lg">
               Organize entregas, links, códigos e conversas da turma em um ambiente limpo, privado e pronto para estudo.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -120,7 +120,7 @@ export default function HomePage() {
 function ProductScene() {
   return (
     <div className="pointer-events-none absolute inset-0 opacity-50 xl:opacity-65">
-      <div className="absolute left-[57%] top-24 w-[820px] rounded-lg border bg-background shadow-panel xl:left-[52%] xl:w-[900px] 2xl:left-[50%]">
+      <div className="absolute left-[62%] top-24 w-[780px] rounded-lg border bg-background shadow-panel xl:left-[59%] xl:w-[860px] 2xl:left-[57%]">
         <div className="flex h-12 items-center gap-2 border-b px-4">
           <span className="h-3 w-3 rounded-full bg-destructive" />
           <span className="h-3 w-3 rounded-full bg-accent" />

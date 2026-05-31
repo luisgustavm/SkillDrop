@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DownloadUploadButton } from "@/components/shared/download-upload-button";
+import { DeleteUploadButton } from "@/components/shared/delete-upload-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FileTypeIcon } from "@/components/shared/file-type-icon";
 import { OpenUploadButton } from "@/components/shared/open-upload-button";
@@ -127,6 +128,7 @@ export function RecentUploads({ userId, uploads, favoriteUploadIds }: RecentUplo
                 </Button>
                 <OpenUploadButton upload={upload} iconOnly />
                 {upload.visibility === "shared" ? <DownloadUploadButton upload={upload} iconOnly /> : null}
+                <DeleteUploadButton upload={upload} iconOnly />
               </div>
             </div>
           );

@@ -8,6 +8,7 @@ import { FileTypeIcon } from "@/components/shared/file-type-icon";
 import { QrShare } from "@/components/shared/qr-share";
 import { OpenUploadButton } from "@/components/shared/open-upload-button";
 import { DownloadUploadButton } from "@/components/shared/download-upload-button";
+import { DeleteUploadButton } from "@/components/shared/delete-upload-button";
 import { isFirebaseConfigured } from "@/firebase/client";
 import { listenSharedUploadByShareId } from "@/services/upload-service";
 import type { AcademicUpload } from "@/types/upload";
@@ -75,6 +76,7 @@ export function ShareViewer({ shareId }: { shareId: string }) {
         <div className="flex flex-wrap gap-2 sm:justify-end">
           <OpenUploadButton upload={upload} />
           <DownloadUploadButton upload={upload} />
+          <DeleteUploadButton upload={upload} />
         </div>
       </div>
       {upload.storageProvider === "browser" ? (

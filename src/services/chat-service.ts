@@ -12,7 +12,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { collections } from "@/firebase/collections";
-import { getClientFirestore } from "@/firebase/client";
+import { getClientFirestore, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
 import { sanitizeText } from "@/lib/sanitize";
 import { createActivityLog } from "@/services/activity-service";
 import type { ChatMessage, ChatRole } from "@/types/chat";
@@ -23,6 +23,8 @@ export async function saveChatMessage(input: {
   role: ChatRole;
   content: string;
 }) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
   await addDoc(collection(getClientFirestore(), collections.chats), {
     userId: input.userId,
     role: input.role,
@@ -44,6 +46,11 @@ export function listenChatHistory(
   onData: (messages: ChatMessage[]) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
+  if (!isFirebaseConfigured) {
+    onData([]);
+    return () => undefined;
+  }
+
   const historyQuery = query(
     collection(getClientFirestore(), collections.chats),
     where("userId", "==", userId),

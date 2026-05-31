@@ -3,7 +3,7 @@
 import type { User } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { collections } from "@/firebase/collections";
-import { getClientFirestore } from "@/firebase/client";
+import { getClientFirestore, isFirebaseConfigured } from "@/firebase/client";
 import type { AuthProviderId, SkillDropUser } from "@/types/user";
 import { toDate } from "@/utils/date";
 
@@ -17,6 +17,8 @@ function getProviderId(user: User): AuthProviderId {
 }
 
 export async function ensureUserProfile(user: User, displayName?: string) {
+  if (!isFirebaseConfigured) return;
+
   const db = getClientFirestore();
   const userRef = doc(db, collections.users, user.uid);
   const snapshot = await getDoc(userRef);
@@ -40,6 +42,8 @@ export async function ensureUserProfile(user: User, displayName?: string) {
 }
 
 export async function getUserProfile(uid: string): Promise<SkillDropUser | null> {
+  if (!isFirebaseConfigured) return null;
+
   const snapshot = await getDoc(doc(getClientFirestore(), collections.users, uid));
   if (!snapshot.exists()) return null;
 

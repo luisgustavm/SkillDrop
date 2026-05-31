@@ -41,11 +41,19 @@ export interface PrivateRoom {
   ownerName: string;
   memberIds: string[];
   memberCount: number;
+  pendingRequests: RoomJoinRequest[];
   lastMessageText: string;
   lastMessageAuthorName: string;
   lastMessageAt: Date | null;
   createdAt: Date | null;
   updatedAt: Date | null;
+}
+
+export interface RoomJoinRequest {
+  userId: string;
+  name: string;
+  avatar: string | null;
+  requestedAt: Date | null;
 }
 
 export interface RoomMessage {
