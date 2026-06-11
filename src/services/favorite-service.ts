@@ -12,8 +12,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { collections } from "@/firebase/collections";
-import { getClientFirestore } from "@/firebase/client";
-import { createActivityLog } from "@/services/activity-service";
+import { getClientFirestore, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
 import type { Favorite } from "@/types/favorite";
 import { toDate } from "@/utils/date";
 
@@ -22,6 +21,8 @@ function favoriteDocumentId(userId: string, uploadId: string) {
 }
 
 export async function setFavorite(userId: string, uploadId: string, enabled: boolean) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
   const db = getClientFirestore();
   const favoriteRef = doc(db, collections.favorites, favoriteDocumentId(userId, uploadId));
 
@@ -35,12 +36,6 @@ export async function setFavorite(userId: string, uploadId: string, enabled: boo
     uploadId,
     createdAt: serverTimestamp(),
   });
-  await createActivityLog({
-    userId,
-    type: "favorite_added",
-    message: "Um envio foi adicionado aos favoritos.",
-    uploadId,
-  });
 }
 
 export function listenFavorites(
@@ -48,6 +43,11 @@ export function listenFavorites(
   onData: (favorites: Favorite[]) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
+  if (!isFirebaseConfigured) {
+    onData([]);
+    return () => undefined;
+  }
+
   const favoritesQuery = query(
     collection(getClientFirestore(), collections.favorites),
     where("userId", "==", userId),

@@ -4,9 +4,8 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   sendPasswordResetEmail,
-  signInAnonymously,
   signInWithEmailAndPassword,
-  signInWithPopup,
+  signInWithRedirect,
   signOut,
   updateProfile,
 } from "firebase/auth";
@@ -35,15 +34,7 @@ export async function registerWithEmail(name: string, email: string, password: s
 export async function loginWithGoogle() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
-  const credential = await signInWithPopup(await getReadyAuth(), provider);
-
-  return credential.user;
-}
-
-export async function loginAsGuest() {
-  const credential = await signInAnonymously(await getReadyAuth());
-
-  return credential.user;
+  await signInWithRedirect(await getReadyAuth(), provider);
 }
 
 export async function recoverPassword(email: string) {

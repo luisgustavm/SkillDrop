@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import {
   Clipboard,
   ClipboardCheck,
@@ -11,30 +10,28 @@ import {
   Minimize2,
   Plus,
   Save,
-  Trash2,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MonacoCodeEditor } from "@/components/editor/monaco-code-editor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DeleteConfirmCard } from "@/components/shared/delete-confirm-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { useAuth } from "@/hooks/use-auth";
 import { useClipboard } from "@/hooks/use-clipboard";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { cn } from "@/lib/utils";
 import { createCodeSnippet, deleteCodeSnippet, listenCodeSnippets, updateCodeSnippet } from "@/services/code-service";
+import { useUiStore } from "@/store/ui-store";
 import type { CodeLanguage, CodeSnippet } from "@/types/code";
 import { formatRelativeDate } from "@/utils/date";
-
-const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
-  ssr: false,
-  loading: () => <Skeleton className="h-[520px] w-full" />,
-});
 
 const languages: Array<{ label: string; value: CodeLanguage; extension: string }> = [
   { label: "JavaScript", value: "javascript", extension: "js" },
@@ -49,7 +46,11 @@ const languages: Array<{ label: string; value: CodeLanguage; extension: string }
 
 const defaultLanguage = languages[1];
 
-export function CodeWorkspace() {
+type CodeWorkspaceProps = {
+  roomId: string;
+};
+
+export function CodeWorkspace({ roomId }: CodeWorkspaceProps) {
   const { user, profile } = useAuth();
   const [title, setTitle] = useState("");
   const [code, setCode] = useState("");
@@ -65,11 +66,22 @@ export function CodeWorkspace() {
   const { resolvedTheme } = useTheme();
   const { copied, copy } = useClipboard();
   const editorRef = useRef<HTMLElement | null>(null);
+  const search = useDebouncedValue(useUiStore((state) => state.globalSearch), 180).trim().toLowerCase();
   const fileName = useMemo(() => {
     const safeTitle = title.trim().replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-{2,}/g, "-") || "skilldrop-code";
 
     return `${safeTitle}.${language.extension}`;
   }, [language.extension, title]);
+  const filteredSnippets = useMemo(() => {
+    if (!search) return snippets;
+
+    return snippets.filter((snippet) =>
+      [snippet.title, snippet.authorName, snippet.language, snippet.extension, snippet.code]
+        .join(" ")
+        .toLowerCase()
+        .includes(search),
+    );
+  }, [search, snippets]);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -81,6 +93,7 @@ export function CodeWorkspace() {
     setLoadingSnippets(true);
 
     return listenCodeSnippets(
+      roomId,
       (items) => {
         setSnippets(items);
         setLoadingSnippets(false);
@@ -90,7 +103,7 @@ export function CodeWorkspace() {
         setLoadingSnippets(false);
       },
     );
-  }, [user?.uid]);
+  }, [roomId, user?.uid]);
 
   const resetDraft = () => {
     setTitle("");
@@ -118,6 +131,7 @@ export function CodeWorkspace() {
     try {
       const payload = {
         userId: user.uid,
+        roomId,
         authorName: profile?.name ?? user.displayName ?? "Estudante",
         authorAvatar: profile?.avatar ?? user.photoURL ?? null,
         title,
@@ -153,8 +167,6 @@ export function CodeWorkspace() {
   };
 
   const removeSnippet = async (snippet: CodeSnippet) => {
-    if (!window.confirm(`Excluir "${snippet.title}"?`)) return;
-
     setDeletingId(snippet.id);
     setError(null);
 
@@ -255,12 +267,12 @@ export function CodeWorkspace() {
           </div>
 
           <div className={cn("h-[560px]", fullscreen && "h-[calc(100vh-190px)]")}>
-            <MonacoEditor
+            <MonacoCodeEditor
               height="100%"
               language={language.value}
               theme={resolvedTheme === "dark" ? "vs-dark" : "light"}
               value={code}
-              onChange={(value) => setCode(value ?? "")}
+              onChange={setCode}
               options={{
                 minimap: { enabled: false },
                 fontSize: 14,
@@ -292,7 +304,14 @@ export function CodeWorkspace() {
             />
           ) : null}
 
-          {snippets.map((snippet) => {
+          {!loadingSnippets && snippets.length > 0 && !filteredSnippets.length ? (
+            <EmptyState
+              title="Nenhum codigo encontrado"
+              description="Ajuste a busca para encontrar outro codigo publicado."
+            />
+          ) : null}
+
+          {filteredSnippets.map((snippet) => {
             const mine = snippet.userId === user?.uid;
             const currentLanguage = languages.find((item) => item.value === snippet.language);
 
@@ -333,20 +352,16 @@ export function CodeWorkspace() {
                       <Button type="button" variant="outline" size="icon" title="Editar código" onClick={() => editSnippet(snippet)}>
                         <Edit3 className="h-4 w-4" aria-hidden="true" />
                       </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        title="Excluir código"
-                        disabled={deletingId === snippet.id}
-                        onClick={() => void removeSnippet(snippet)}
-                      >
-                        {deletingId === snippet.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        )}
-                      </Button>
+                      <DeleteConfirmCard
+                        title="Excluir codigo"
+                        description={`O codigo "${snippet.title}" sera removido da lista de codigos publicados.`}
+                        confirmLabel="Excluir codigo"
+                        triggerTitle="Excluir codigo"
+                        triggerVariant="outline"
+                        iconOnly
+                        loading={deletingId === snippet.id}
+                        onConfirm={() => removeSnippet(snippet)}
+                      />
                     </>
                   ) : null}
                 </div>

@@ -11,6 +11,7 @@ export type CodeLanguage =
 export interface CodeSnippet {
   id: string;
   userId: string;
+  roomId: string | null;
   authorName: string;
   authorAvatar: string | null;
   title: string;
@@ -23,6 +24,7 @@ export interface CodeSnippet {
 
 export type SaveCodeSnippetInput = {
   userId: string;
+  roomId: string;
   authorName: string;
   authorAvatar: string | null;
   title: string;

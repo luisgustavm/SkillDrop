@@ -12,41 +12,47 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { collections } from "@/firebase/collections";
-import { getClientFirestore } from "@/firebase/client";
+import { getClientFirestore, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
 import { sanitizeText } from "@/lib/sanitize";
-import { createActivityLog } from "@/services/activity-service";
+import { normalizeRoomCode } from "@/services/room-service";
 import type { ChatMessage, ChatRole } from "@/types/chat";
 import { toDate } from "@/utils/date";
 
 export async function saveChatMessage(input: {
   userId: string;
+  roomId: string;
   role: ChatRole;
   content: string;
 }) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
+  const roomId = normalizeRoomCode(input.roomId);
+  if (roomId.length !== 8) throw new Error("Entre em uma sala para conversar com a IA.");
+
   await addDoc(collection(getClientFirestore(), collections.chats), {
     userId: input.userId,
+    roomId,
     role: input.role,
     content: sanitizeText(input.content, 8000),
     createdAt: serverTimestamp(),
   });
-
-  if (input.role === "user") {
-    await createActivityLog({
-      userId: input.userId,
-      type: "ai_message",
-      message: "Uma pergunta foi enviada ao assistente.",
-    });
-  }
 }
 
 export function listenChatHistory(
   userId: string,
+  roomId: string,
   onData: (messages: ChatMessage[]) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
+  if (!isFirebaseConfigured) {
+    onData([]);
+    return () => undefined;
+  }
+
   const historyQuery = query(
     collection(getClientFirestore(), collections.chats),
     where("userId", "==", userId),
+    where("roomId", "==", normalizeRoomCode(roomId)),
     orderBy("createdAt", "asc"),
     limit(60),
   );
@@ -61,6 +67,7 @@ export function listenChatHistory(
           return {
             id: item.id,
             userId: data.userId,
+            roomId: typeof data.roomId === "string" ? data.roomId : null,
             role: data.role,
             content: data.content,
             createdAt: toDate(data.createdAt),

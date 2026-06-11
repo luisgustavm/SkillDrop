@@ -8,7 +8,7 @@ export const firebaseClientConfig = {
 };
 
 export const isFirebaseConfigured = Boolean(
-  firebaseClientConfig.apiKey &&
+    firebaseClientConfig.apiKey &&
     firebaseClientConfig.authDomain &&
     firebaseClientConfig.projectId &&
     firebaseClientConfig.messagingSenderId &&

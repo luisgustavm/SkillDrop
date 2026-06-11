@@ -12,29 +12,25 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { collections } from "@/firebase/collections";
-import { getClientFirestore } from "@/firebase/client";
+import { getClientFirestore, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
 import { sanitizeText } from "@/lib/sanitize";
-import { createActivityLog } from "@/services/activity-service";
 import type { Comment } from "@/types/comment";
 import { toDate } from "@/utils/date";
 
 export async function createComment(input: {
   userId: string;
+  roomId?: string | null;
   uploadId: string;
   authorName: string;
   authorAvatar: string | null;
   content: string;
 }) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
   await addDoc(collection(getClientFirestore(), collections.comments), {
     ...input,
     content: sanitizeText(input.content, 1000),
     createdAt: serverTimestamp(),
-  });
-  await createActivityLog({
-    userId: input.userId,
-    type: "comment_created",
-    message: "Um comentário foi publicado.",
-    uploadId: input.uploadId,
   });
 }
 
@@ -43,6 +39,11 @@ export function listenComments(
   onData: (comments: Comment[]) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
+  if (!isFirebaseConfigured) {
+    onData([]);
+    return () => undefined;
+  }
+
   const commentsQuery = query(
     collection(getClientFirestore(), collections.comments),
     where("uploadId", "==", uploadId),

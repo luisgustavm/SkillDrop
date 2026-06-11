@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Globe, Loader2, LogIn, Mail, UserPlus } from "lucide-react";
+import { ArrowLeft, Globe, KeyRound, Loader2, LogIn, Mail, UserPlus } from "lucide-react";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -31,7 +31,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
 }
 
 function LoginForm() {
-  const { login, loginGoogle, loginGuest, loading, error, user } = useAuth();
+  const { login, loginGoogle, loading, error, user, firebaseReady } = useAuth();
   const router = useRouter();
   const form = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema), defaultValues: { email: "", password: "" } });
 
@@ -40,7 +40,7 @@ function LoginForm() {
   return (
     <AuthFrame
       title="Entrar no SkillDrop"
-      description="Acesse seu workspace acadêmico."
+      description="Acesse sua area academica."
       footer={
         <>
           Novo por aqui?{" "}
@@ -53,9 +53,13 @@ function LoginForm() {
       <form
         className="space-y-4"
         onSubmit={form.handleSubmit(async (values) => {
-          await login(values.email, values.password);
-          toast.success("Sessão iniciada.");
-          router.replace(getAuthRedirectPath());
+          try {
+            await login(values.email, values.password);
+            toast.success("Sessao iniciada.");
+            router.replace(getAuthRedirectPath());
+          } catch (authError) {
+            showAuthActionError(authError);
+          }
         })}
       >
         {error ? <ErrorState message={error} /> : null}
@@ -65,35 +69,31 @@ function LoginForm() {
         <Field label="Senha" error={form.formState.errors.password?.message}>
           <Input type="password" autoComplete="current-password" {...form.register("password")} />
         </Field>
-        <Button type="submit" className="w-full" disabled={loading || form.formState.isSubmitting}>
+        <Button type="submit" className="w-full" disabled={!firebaseReady || loading || form.formState.isSubmitting}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <LogIn className="h-4 w-4" aria-hidden="true" />}
           Entrar
         </Button>
       </form>
 
       <AuthAlternatives
-        loading={loading}
+        disabled={!firebaseReady || loading}
         onGoogle={async () => {
           await loginGoogle();
-          toast.success("Login Google conectado.");
-          router.replace(getAuthRedirectPath());
-        }}
-        onGuest={async () => {
-          await loginGuest();
-          toast.success("Sessão convidada criada.");
-          router.replace(getAuthRedirectPath());
         }}
       />
 
-      <Link href="/reset-password" className="block text-center text-sm font-medium text-primary hover:underline">
-        Esqueci minha senha
-      </Link>
+      <Button asChild variant="ghost" className="w-full">
+        <Link href="/reset-password">
+          <KeyRound className="h-4 w-4" aria-hidden="true" />
+          Esqueci minha senha
+        </Link>
+      </Button>
     </AuthFrame>
   );
 }
 
 function RegisterForm() {
-  const { register, loginGoogle, loginGuest, loading, error, user } = useAuth();
+  const { register, loginGoogle, loading, error, user, firebaseReady } = useAuth();
   const router = useRouter();
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -105,10 +105,10 @@ function RegisterForm() {
   return (
     <AuthFrame
       title="Criar conta"
-      description="Organize entregas, links e códigos em um só lugar."
+      description="Organize entregas, links e codigos em um so lugar."
       footer={
         <>
-          Já tem conta?{" "}
+          Ja tem conta?{" "}
           <Link href="/login" className="font-medium text-primary hover:underline">
             Entrar
           </Link>
@@ -118,9 +118,13 @@ function RegisterForm() {
       <form
         className="space-y-4"
         onSubmit={form.handleSubmit(async (values) => {
-          await register(values.name, values.email, values.password);
-          toast.success("Conta criada.");
-          router.replace(getAuthRedirectPath());
+          try {
+            await register(values.name, values.email, values.password);
+            toast.success("Conta criada.");
+            router.replace(getAuthRedirectPath());
+          } catch (authError) {
+            showAuthActionError(authError);
+          }
         })}
       >
         {error ? <ErrorState message={error} /> : null}
@@ -133,23 +137,16 @@ function RegisterForm() {
         <Field label="Senha" error={form.formState.errors.password?.message}>
           <Input type="password" autoComplete="new-password" {...form.register("password")} />
         </Field>
-        <Button type="submit" className="w-full" disabled={loading || form.formState.isSubmitting}>
+        <Button type="submit" className="w-full" disabled={!firebaseReady || loading || form.formState.isSubmitting}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <UserPlus className="h-4 w-4" aria-hidden="true" />}
           Registrar
         </Button>
       </form>
 
       <AuthAlternatives
-        loading={loading}
+        disabled={!firebaseReady || loading}
         onGoogle={async () => {
           await loginGoogle();
-          toast.success("Login Google conectado.");
-          router.replace(getAuthRedirectPath());
-        }}
-        onGuest={async () => {
-          await loginGuest();
-          toast.success("Sessão convidada criada.");
-          router.replace(getAuthRedirectPath());
         }}
       />
     </AuthFrame>
@@ -157,7 +154,7 @@ function RegisterForm() {
 }
 
 function ResetPasswordForm() {
-  const { resetPassword, loading, error } = useAuth();
+  const { resetPassword, loading, error, firebaseReady } = useAuth();
   const form = useForm<ResetPasswordFormValues>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: { email: "" },
@@ -176,15 +173,19 @@ function ResetPasswordForm() {
       <form
         className="space-y-4"
         onSubmit={form.handleSubmit(async (values) => {
-          await resetPassword(values.email);
-          toast.success("E-mail de recuperação enviado.");
+          try {
+            await resetPassword(values.email);
+            toast.success("E-mail de recuperacao enviado.");
+          } catch (authError) {
+            showAuthActionError(authError);
+          }
         })}
       >
         {error ? <ErrorState message={error} /> : null}
         <Field label="E-mail" error={form.formState.errors.email?.message}>
           <Input type="email" autoComplete="email" {...form.register("email")} />
         </Field>
-        <Button type="submit" className="w-full" disabled={loading || form.formState.isSubmitting}>
+        <Button type="submit" className="w-full" disabled={!firebaseReady || loading || form.formState.isSubmitting}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Mail className="h-4 w-4" aria-hidden="true" />}
           Enviar link
         </Button>
@@ -194,13 +195,11 @@ function ResetPasswordForm() {
 }
 
 function AuthAlternatives({
-  loading,
+  disabled,
   onGoogle,
-  onGuest,
 }: {
-  loading: boolean;
+  disabled: boolean;
   onGoogle: () => Promise<void>;
-  onGuest: () => Promise<void>;
 }) {
   return (
     <div className="space-y-3">
@@ -208,17 +207,18 @@ function AuthAlternatives({
         <span className="bg-card px-3">ou continue com</span>
         <span className="absolute left-0 top-1/2 -z-10 h-px w-full bg-border" />
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <Button type="button" variant="outline" disabled={loading} onClick={() => void onGoogle()}>
+      <div>
+        <Button type="button" variant="outline" className="w-full" disabled={disabled} onClick={() => void onGoogle().catch(showAuthActionError)}>
           <Globe className="h-4 w-4" aria-hidden="true" />
           Google
-        </Button>
-        <Button type="button" variant="outline" disabled={loading} onClick={() => void onGuest()}>
-          Convidado
         </Button>
       </div>
     </div>
   );
+}
+
+function showAuthActionError(error: unknown) {
+  toast.error(error instanceof Error ? error.message : "Nao foi possivel concluir a autenticacao.");
 }
 
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
@@ -245,6 +245,10 @@ function AuthFrame({
   return (
     <div className="w-full max-w-md rounded-lg border bg-card p-6 shadow-soft">
       <div className="mb-6">
+        <Link href="/" className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          Voltar para tela inicial
+        </Link>
         <Link href="/" className="mb-6 flex w-fit items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
             SD
@@ -269,10 +273,10 @@ function useRedirectWhenAuthenticated(authenticated: boolean) {
 }
 
 function getAuthRedirectPath() {
-  if (typeof window === "undefined") return "/dashboard";
+  if (typeof window === "undefined") return "/rooms";
 
   const nextPath = new URLSearchParams(window.location.search).get("next");
   if (nextPath?.startsWith("/") && !nextPath.startsWith("//")) return nextPath;
 
-  return "/dashboard";
+  return "/rooms";
 }

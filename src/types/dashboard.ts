@@ -1,4 +1,3 @@
-import type { ActivityLog } from "@/types/activity";
 import type { Favorite } from "@/types/favorite";
 import type { AcademicUpload } from "@/types/upload";
 
@@ -12,6 +11,5 @@ export interface DashboardStats {
 export interface DashboardData {
   uploads: AcademicUpload[];
   favorites: Favorite[];
-  activities: ActivityLog[];
   stats: DashboardStats;
 }

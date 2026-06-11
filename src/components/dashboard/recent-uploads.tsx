@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DownloadUploadButton } from "@/components/shared/download-upload-button";
+import { DeleteUploadButton } from "@/components/shared/delete-upload-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FileTypeIcon } from "@/components/shared/file-type-icon";
 import { OpenUploadButton } from "@/components/shared/open-upload-button";
@@ -18,11 +19,12 @@ import { cn } from "@/lib/utils";
 
 type RecentUploadsProps = {
   userId: string;
+  roomId?: string;
   uploads: AcademicUpload[];
   favoriteUploadIds: Set<string>;
 };
 
-export function RecentUploads({ userId, uploads, favoriteUploadIds }: RecentUploadsProps) {
+export function RecentUploads({ userId, roomId, uploads, favoriteUploadIds }: RecentUploadsProps) {
   const [typeFilter, setTypeFilter] = useState<FileKind | "all">("all");
   const [visibilityFilter, setVisibilityFilter] = useState<"all" | "private" | "shared">("all");
   const filteredUploads = useMemo(
@@ -40,10 +42,10 @@ export function RecentUploads({ userId, uploads, favoriteUploadIds }: RecentUplo
     return (
       <EmptyState
         title="Nenhum envio ainda"
-        description="Envie PDFs, códigos, imagens, vídeos ou ZIPs para organizar suas atividades."
+        description="Envie PDFs, codigos, imagens, videos ou ZIPs para organizar seus materiais."
         action={
           <Button asChild>
-            <Link href="/uploads">Enviar arquivo</Link>
+            <Link href={roomId ? `/rooms/${encodeURIComponent(roomId)}/uploads` : "/rooms"}>Enviar arquivo</Link>
           </Button>
         }
       />
@@ -56,7 +58,7 @@ export function RecentUploads({ userId, uploads, favoriteUploadIds }: RecentUplo
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-base font-semibold">Uploads recentes</h2>
-            <p className="text-sm text-muted-foreground">Arquivos salvos grátis no navegador e metadados no Firestore.</p>
+            <p className="text-sm text-muted-foreground">Materiais recentes com tags, status e ações rápidas.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <select
@@ -100,6 +102,12 @@ export function RecentUploads({ userId, uploads, favoriteUploadIds }: RecentUplo
                   <Badge variant={upload.visibility === "shared" ? "default" : "muted"}>
                     {upload.visibility === "shared" ? "compartilhado" : "privado"}
                   </Badge>
+                  {upload.visibility === "shared" && upload.storageProvider === "browser" ? (
+                    <Badge variant="muted">local antigo</Badge>
+                  ) : null}
+                  {upload.storageProvider === "inline" || upload.storageProvider === "blob" ? (
+                    <Badge variant="secondary">baixavel</Badge>
+                  ) : null}
                 </div>
                 <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
                   {upload.description || upload.fileName}
@@ -127,12 +135,13 @@ export function RecentUploads({ userId, uploads, favoriteUploadIds }: RecentUplo
                 </Button>
                 <OpenUploadButton upload={upload} iconOnly />
                 {upload.visibility === "shared" ? <DownloadUploadButton upload={upload} iconOnly /> : null}
+                <DeleteUploadButton upload={upload} iconOnly />
               </div>
             </div>
           );
         }) : (
           <div className="p-4">
-            <EmptyState title="Nada nesse filtro" description="Ajuste tipo, visibilidade ou busca global para encontrar materiais." />
+            <EmptyState title="Nada nesse filtro" description="Ajuste tipo, visibilidade ou busca para encontrar materiais." />
           </div>
         )}
       </div>

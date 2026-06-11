@@ -3,8 +3,9 @@ export const collections = {
   uploads: "uploads",
   chats: "chats",
   globalMessages: "globalMessages",
+  rooms: "rooms",
   codeSnippets: "codeSnippets",
   favorites: "favorites",
   comments: "comments",
-  activityLogs: "activityLogs",
+  notifications: "notifications",
 } as const;

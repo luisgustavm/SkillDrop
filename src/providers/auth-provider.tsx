@@ -5,7 +5,6 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { getClientAuth, isFirebaseConfigured } from "@/firebase/client";
 import { getFirebaseErrorMessage } from "@/firebase/errors";
 import {
-  loginAsGuest,
   loginWithEmail,
   loginWithGoogle,
   logoutUser,
@@ -23,10 +22,10 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   loginGoogle: () => Promise<void>;
-  loginGuest: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   getIdToken: () => Promise<string | null>;
+  refreshProfile: () => Promise<void>;
 };
 
 const SESSION_COOKIE_NAME = "skilldrop_session";
@@ -67,6 +66,9 @@ function buildFallbackProfile(currentUser: User, displayName?: string): SkillDro
     avatar: currentUser.photoURL,
     provider,
     isAnonymous: currentUser.isAnonymous,
+    accountStatus: "active",
+    deactivatedAt: null,
+    deletedAt: null,
     createdAt: null,
     updatedAt: null,
   };
@@ -86,9 +88,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (loadedProfile) setProfile(loadedProfile);
     } catch {
       // Firestore can be unavailable while rules/indexes are being configured.
-      // Authentication should remain fast and usable even if profile sync fails.
     }
   }, []);
+
+  const refreshProfile = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const { getUserProfile } = await import("@/services/user-service");
+      const loadedProfile = await getUserProfile(user.uid);
+      setProfile(loadedProfile ?? buildFallbackProfile(user));
+    } catch (profileError) {
+      setError(getFirebaseErrorMessage(profileError));
+    }
+  }, [user]);
 
   const syncTokenCookieInBackground = useCallback(async (currentUser: User) => {
     try {
@@ -99,26 +112,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const applySession = useCallback((currentUser: User | null, displayName?: string) => {
-    if (!currentUser) {
-      setUser(null);
-      setProfile(null);
-      clearSessionCookies();
-      return;
-    }
+  const applySession = useCallback(
+    (currentUser: User | null, displayName?: string) => {
+      if (!currentUser) {
+        setUser(null);
+        setProfile(null);
+        clearSessionCookies();
+        return;
+      }
 
-    setCookie(SESSION_COOKIE_NAME, "1", SESSION_MAX_AGE_SECONDS);
-    setUser(currentUser);
-    setProfile(buildFallbackProfile(currentUser, displayName));
+      setCookie(SESSION_COOKIE_NAME, "1", SESSION_MAX_AGE_SECONDS);
+      setUser(currentUser);
+      setProfile(buildFallbackProfile(currentUser, displayName));
 
-    void syncTokenCookieInBackground(currentUser);
-    void syncProfileInBackground(currentUser, displayName);
-  }, [syncProfileInBackground, syncTokenCookieInBackground]);
+      void syncTokenCookieInBackground(currentUser);
+      void syncProfileInBackground(currentUser, displayName);
+    },
+    [syncProfileInBackground, syncTokenCookieInBackground],
+  );
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
+      clearSessionCookies();
+      setUser(null);
+      setProfile(null);
       setLoading(false);
-      setError("Firebase não está configurado. Confira o arquivo .env.local.");
+      setError("Firebase nao esta configurado. Preencha as variaveis NEXT_PUBLIC_FIREBASE_* no Vercel.");
       return;
     }
 
@@ -183,8 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       error,
       login: (email, password) => runAuthAction(() => loginWithEmail(email, password)),
       register: (name, email, password) => runAuthAction(() => registerWithEmail(name, email, password), name),
-      loginGoogle: () => runAuthAction(loginWithGoogle),
-      loginGuest: () => runAuthAction(loginAsGuest),
+      loginGoogle: () => runVoidAuthAction(loginWithGoogle),
       resetPassword: (email) => runVoidAuthAction(() => recoverPassword(email)),
       logout: () =>
         runVoidAuthAction(async () => {
@@ -192,8 +210,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           applySession(null);
         }),
       getIdToken: () => user?.getIdToken() ?? Promise.resolve(null),
+      refreshProfile,
     }),
-    [applySession, error, loading, profile, runAuthAction, runVoidAuthAction, user],
+    [applySession, error, loading, profile, refreshProfile, runAuthAction, runVoidAuthAction, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

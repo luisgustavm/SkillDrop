@@ -8,7 +8,7 @@ export function DashboardSkeleton() {
           <Skeleton key={index} className="h-28" />
         ))}
       </div>
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px] 2xl:grid-cols-[minmax(0,1fr)_480px]">
         <Skeleton className="h-[440px]" />
         <Skeleton className="h-[440px]" />
       </div>

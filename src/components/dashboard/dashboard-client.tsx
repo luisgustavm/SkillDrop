@@ -1,7 +1,6 @@
 "use client";
 
 import { ErrorState } from "@/components/shared/error-state";
-import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import { FavoritesPanel } from "@/components/dashboard/favorites-panel";
 import { RecentUploads } from "@/components/dashboard/recent-uploads";
@@ -11,9 +10,13 @@ import { useDashboardData } from "@/hooks/use-dashboard-data";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useUiStore } from "@/store/ui-store";
 
-export function DashboardClient() {
+type DashboardClientProps = {
+  roomId: string;
+};
+
+export function DashboardClient({ roomId }: DashboardClientProps) {
   const { user, profile } = useAuth();
-  const { uploads, favorites, activities, stats, loading, error } = useDashboardData(user?.uid);
+  const { uploads, favorites, stats, loading, error } = useDashboardData(user?.uid, roomId);
   const search = useDebouncedValue(useUiStore((state) => state.globalSearch), 180).toLowerCase();
 
   const favoriteIds = new Set(favorites.map((favorite) => favorite.uploadId));
@@ -33,12 +36,12 @@ export function DashboardClient() {
       <section className="glass-panel rounded-lg border p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-medium text-primary">Workspace acadêmico</p>
+            <p className="text-sm font-medium text-primary">Biblioteca da sala</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-normal sm:text-3xl">
               Bom estudo, {profile?.name?.split(" ")[0] ?? "estudante"}.
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              Organize entregas, visualize materiais importantes e converse com a IA sem sair da sua área.
+              Organize materiais, salve codigos e converse com a IA em um espaco simples para a sua sala.
             </p>
           </div>
         </div>
@@ -48,12 +51,9 @@ export function DashboardClient() {
 
       <StatsGrid stats={stats} />
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-        <RecentUploads userId={user?.uid ?? ""} uploads={filteredUploads} favoriteUploadIds={favoriteIds} />
-        <div className="space-y-6">
-          <FavoritesPanel favorites={favorites} uploads={uploads} />
-          <ActivityFeed activities={activities} />
-        </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px] 2xl:grid-cols-[minmax(0,1fr)_480px]">
+        <RecentUploads userId={user?.uid ?? ""} roomId={roomId} uploads={filteredUploads} favoriteUploadIds={favoriteIds} />
+        <FavoritesPanel favorites={favorites} uploads={uploads} />
       </div>
     </div>
   );

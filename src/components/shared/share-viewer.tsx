@@ -8,6 +8,7 @@ import { FileTypeIcon } from "@/components/shared/file-type-icon";
 import { QrShare } from "@/components/shared/qr-share";
 import { OpenUploadButton } from "@/components/shared/open-upload-button";
 import { DownloadUploadButton } from "@/components/shared/download-upload-button";
+import { DeleteUploadButton } from "@/components/shared/delete-upload-button";
 import { isFirebaseConfigured } from "@/firebase/client";
 import { listenSharedUploadByShareId } from "@/services/upload-service";
 import type { AcademicUpload } from "@/types/upload";
@@ -62,6 +63,10 @@ export function ShareViewer({ shareId }: { shareId: string }) {
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-normal">{upload.title}</h1>
             <Badge>compartilhado</Badge>
+            {upload.storageProvider === "browser" ? <Badge variant="muted">arquivo local</Badge> : null}
+            {upload.storageProvider === "inline" || upload.storageProvider === "blob" ? (
+              <Badge variant="secondary">download ativo</Badge>
+            ) : null}
           </div>
           <p className="mt-2 text-sm text-muted-foreground">{upload.description || upload.fileName}</p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -75,11 +80,12 @@ export function ShareViewer({ shareId }: { shareId: string }) {
         <div className="flex flex-wrap gap-2 sm:justify-end">
           <OpenUploadButton upload={upload} />
           <DownloadUploadButton upload={upload} />
+          <DeleteUploadButton upload={upload} />
         </div>
       </div>
       {upload.storageProvider === "browser" ? (
         <p className="mt-4 rounded-md border bg-muted/60 p-3 text-sm text-muted-foreground">
-          Este arquivo foi salvo gratuitamente no navegador de quem enviou. O link compartilha os metadados; o arquivo abre apenas nesse mesmo navegador.
+          Este e um material antigo salvo apenas no navegador de envio. Para abrir em qualquer dispositivo, envie novamente como compartilhavel ate 640 KB ou salve um link externo.
         </p>
       ) : null}
       {shareUrl ? <div className="mt-6"><QrShare url={shareUrl} /></div> : null}

@@ -11,7 +11,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { collections } from "@/firebase/collections";
-import { getClientFirestore } from "@/firebase/client";
+import { getClientFirestore, getFirebaseConfigError, isFirebaseConfigured } from "@/firebase/client";
 import { ACCEPTED_EXTENSIONS } from "@/lib/constants";
 import { sanitizeFileName, sanitizeText } from "@/lib/sanitize";
 import type { GlobalChatAttachment, GlobalChatMessage } from "@/types/chat";
@@ -42,11 +42,11 @@ export async function createGlobalChatAttachment(file: File): Promise<GlobalChat
   const isImage = file.type.startsWith("image/");
 
   if (file.size > MAX_GLOBAL_CHAT_ATTACHMENT_BYTES) {
-    throw new Error("O anexo precisa ter até 512 KB no chat global.");
+    throw new Error("O anexo precisa ter até 512 KB.");
   }
 
   if (!isImage && !ACCEPTED_EXTENSIONS.includes(extension)) {
-    throw new Error(`Formato .${extension || "desconhecido"} não é aceito no chat global.`);
+    throw new Error(`Formato .${extension || "desconhecido"} não é aceito.`);
   }
 
   return {
@@ -59,6 +59,8 @@ export async function createGlobalChatAttachment(file: File): Promise<GlobalChat
 }
 
 export async function sendGlobalMessage(input: SendGlobalMessageInput) {
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
+
   const content = sanitizeText(input.content, 1000);
   const attachment = input.attachment ?? null;
 
@@ -96,6 +98,11 @@ export function listenGlobalMessages(
   onError: (error: Error) => void,
   resultLimit = 80,
 ): Unsubscribe {
+  if (!isFirebaseConfigured) {
+    onData([]);
+    return () => undefined;
+  }
+
   const messagesQuery = query(
     collection(getClientFirestore(), collections.globalMessages),
     orderBy("createdAt", "desc"),

@@ -46,6 +46,7 @@ export function CommentsPanel({ userId, profile, uploads }: CommentsPanelProps) 
     try {
       await createComment({
         userId,
+        roomId: selectedUpload.roomId,
         uploadId: selectedUpload.id,
         authorName: profile?.name ?? "Estudante",
         authorAvatar: profile?.avatar ?? null,

@@ -16,10 +16,14 @@ let firestoreInstance: Firestore | null = null;
 let analyticsInstance: Analytics | null = null;
 let authPersistencePromise: Promise<void> | null = null;
 
+export const FIREBASE_CONFIG_ERROR_MESSAGE = "Firebase nao esta configurado. Preencha as variaveis NEXT_PUBLIC_FIREBASE_*.";
+
+export function getFirebaseConfigError() {
+  return new Error(FIREBASE_CONFIG_ERROR_MESSAGE);
+}
+
 export function getFirebaseClientApp(): FirebaseApp {
-  if (!isFirebaseConfigured) {
-    throw new Error("Firebase não está configurado. Preencha as variáveis NEXT_PUBLIC_FIREBASE_*.");
-  }
+  if (!isFirebaseConfigured) throw getFirebaseConfigError();
 
   const config = firebaseClientConfig as FirebaseOptions;
   return getApps().length ? getApp() : initializeApp(config);

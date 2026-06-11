@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { UploadPage } from "@/components/upload/upload-page";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Uploads",
 };
 
 export default function UploadsPage() {
-  return <UploadPage />;
+  redirect("/rooms");
 }

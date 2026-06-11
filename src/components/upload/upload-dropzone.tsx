@@ -21,12 +21,13 @@ import { classifyFile, formatBytes } from "@/utils/file";
 
 type UploadDropzoneProps = {
   userId: string;
+  roomId: string;
 };
 
-export function UploadDropzone({ userId }: UploadDropzoneProps) {
+export function UploadDropzone({ userId, roomId }: UploadDropzoneProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const upload = useUpload(userId);
+  const upload = useUpload(userId, roomId);
   const form = useForm<UploadMetadataFormValues>({
     resolver: zodResolver(uploadMetadataSchema),
     defaultValues: {
@@ -36,6 +37,7 @@ export function UploadDropzone({ userId }: UploadDropzoneProps) {
       visibility: "private",
     },
   });
+  const selectedVisibility = form.watch("visibility");
 
   const handleFile = (file?: File) => {
     upload.selectFile(file ?? null);
@@ -61,7 +63,7 @@ export function UploadDropzone({ userId }: UploadDropzoneProps) {
   });
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-6 xl:grid-cols-[1fr_420px]">
+    <form onSubmit={onSubmit} className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px] 2xl:grid-cols-[minmax(0,1fr)_520px]">
       <section className="space-y-4">
         <div
           className={cn(
@@ -160,7 +162,7 @@ export function UploadDropzone({ userId }: UploadDropzoneProps) {
         {upload.status === "completed" ? (
           <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-            Arquivo salvo grátis no navegador e metadados salvos no Firestore.
+            Material salvo com sucesso na sua biblioteca.
           </div>
         ) : null}
       </section>
@@ -168,7 +170,7 @@ export function UploadDropzone({ userId }: UploadDropzoneProps) {
       <section className="rounded-lg border bg-card p-5">
         <div>
           <h2 className="text-base font-semibold">Metadados</h2>
-          <p className="text-sm text-muted-foreground">O arquivo fica no navegador; essas informações serão salvas no Firestore.</p>
+          <p className="text-sm text-muted-foreground">Essas informações ajudam você a encontrar e compartilhar o material depois.</p>
         </div>
 
         <div className="mt-5 space-y-4">
@@ -185,7 +187,7 @@ export function UploadDropzone({ userId }: UploadDropzoneProps) {
             <Textarea
               id="description"
               {...form.register("description")}
-              placeholder="Explique o conteúdo, disciplina ou instruções para revisão."
+              placeholder="Explique o conteudo, contexto ou instrucoes para revisao."
             />
             {form.formState.errors.description ? (
               <p className="text-xs text-destructive">{form.formState.errors.description.message}</p>
@@ -212,14 +214,19 @@ export function UploadDropzone({ userId }: UploadDropzoneProps) {
                   key={visibility}
                   className={cn(
                     "cursor-pointer rounded-md border p-3 text-sm transition hover:bg-muted",
-                    form.watch("visibility") === visibility && "border-primary bg-primary/10 text-primary",
+                    selectedVisibility === visibility && "border-primary bg-primary/10 text-primary",
                   )}
                 >
                   <input type="radio" value={visibility} className="sr-only" {...form.register("visibility")} />
-                  {visibility === "private" ? "Privado" : "Compartilhável"}
+                  {visibility === "private" ? "Privado" : "Compartilhavel"}
                 </label>
               ))}
             </div>
+            {selectedVisibility === "shared" ? (
+              <p className="rounded-md border bg-muted/60 p-3 text-xs text-muted-foreground">
+                Arquivos compartilhaveis sao salvos no Vercel Blob e podem ser abertos ou baixados pelo link da sala.
+              </p>
+            ) : null}
           </fieldset>
         </div>
 

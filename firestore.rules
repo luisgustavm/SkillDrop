@@ -14,14 +14,32 @@ service cloud.firestore {
       return resource.data.visibility == "shared";
     }
 
+    function isValidRoomId(roomId) {
+      return roomId is string && roomId.size() == 8;
+    }
+
+    function canReadRoom(roomId) {
+      return isValidRoomId(roomId) && isRoomMember(roomId);
+    }
+
+    function canReadUpload(uploadId) {
+      return signedIn()
+        && (
+          get(/databases/$(database)/documents/uploads/$(uploadId)).data.userId == request.auth.uid
+          || get(/databases/$(database)/documents/uploads/$(uploadId)).data.visibility == "shared"
+          || canReadRoom(get(/databases/$(database)/documents/uploads/$(uploadId)).data.roomId)
+        );
+    }
+
     function isCodeLanguage(language) {
       return language in ["javascript", "typescript", "python", "java", "csharp", "html", "css", "sql"];
     }
 
     function isValidCodeSnippet(data) {
       return data.keys().hasOnly([
-          "userId", "authorName", "authorAvatar", "title", "language", "extension", "code", "createdAt", "updatedAt"
+          "userId", "roomId", "authorName", "authorAvatar", "title", "language", "extension", "code", "createdAt", "updatedAt"
         ])
+        && isValidRoomId(data.roomId)
         && data.authorName is string
         && data.authorName.size() > 0
         && data.authorName.size() <= 80
@@ -58,21 +76,196 @@ service cloud.firestore {
       );
     }
 
+    function isValidRoom(data) {
+      return data.keys().hasOnly([
+          "code", "name", "ownerId", "ownerName", "memberIds", "memberCount",
+          "memberProfiles", "bannedUserIds",
+          "pendingRequests", "pendingRequestUserIds",
+          "lastMessageText", "lastMessageAuthorName", "lastMessageAt", "createdAt", "updatedAt"
+        ])
+        && data.code is string
+        && data.code.size() == 8
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 80
+        && data.ownerId is string
+        && data.ownerName is string
+        && data.ownerName.size() > 0
+        && data.ownerName.size() <= 80
+        && data.memberIds is list
+        && (!("memberProfiles" in data) || data.memberProfiles is list)
+        && (!("bannedUserIds" in data) || data.bannedUserIds is list)
+        && data.memberCount is int
+        && data.memberCount >= 1
+        && data.pendingRequests is list
+        && data.pendingRequestUserIds is list
+        && data.lastMessageText is string
+        && data.lastMessageText.size() <= 1000
+        && data.lastMessageAuthorName is string
+        && data.lastMessageAuthorName.size() <= 80;
+    }
+
+    function isRoomMember(roomId) {
+      return signedIn()
+        && isValidRoomId(roomId)
+        && request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.memberIds;
+    }
+
+    function isValidUpload(data) {
+      return data.keys().hasOnly([
+          "userId", "roomId", "title", "description", "fileUrl", "downloadUrl", "storagePath", "storageProvider", "localFileId",
+          "fileName", "fileType", "mimeType", "size", "tags", "visibility", "shareId", "createdAt", "updatedAt"
+        ])
+        && owns(data.userId)
+        && isValidRoomId(data.roomId)
+        && isRoomMember(data.roomId)
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 120
+        && data.description is string
+        && data.description.size() <= 1000
+        && data.fileUrl is string
+        && data.fileUrl.size() > 0
+        && data.fileUrl.size() <= 900000
+        && (data.downloadUrl == null || (data.downloadUrl is string && data.downloadUrl.size() <= 2000))
+        && data.storagePath is string
+        && data.storageProvider in ["blob", "browser", "inline", "url"]
+        && (data.localFileId == null || data.localFileId is string)
+        && data.fileName is string
+        && data.fileType in [
+          "pdf", "document", "archive", "image", "video", "text", "code", "link", "other"
+        ]
+        && data.mimeType is string
+        && data.size is int
+        && data.size <= 100 * 1024 * 1024
+        && data.tags is list
+        && data.visibility in ["private", "shared"]
+        && data.shareId is string
+        && data.shareId.size() > 0;
+    }
+
+    function isRequestingRoomAccess() {
+      return signedIn()
+        && !(request.auth.uid in resource.data.memberIds)
+        && !(request.auth.uid in resource.data.pendingRequestUserIds)
+        && request.auth.uid in request.resource.data.pendingRequestUserIds
+        && request.resource.data.pendingRequestUserIds.size() == resource.data.pendingRequestUserIds.size() + 1
+        && request.resource.data.memberIds == resource.data.memberIds
+        && request.resource.data.memberCount == resource.data.memberCount
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "pendingRequests", "pendingRequestUserIds", "updatedAt"
+        ]);
+    }
+
+    function isOwnerRoomUpdate() {
+      return owns(resource.data.ownerId)
+        && request.resource.data.code == resource.data.code
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.ownerId in request.resource.data.memberIds
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name", "ownerId", "ownerName", "memberProfiles", "bannedUserIds", "pendingRequests", "pendingRequestUserIds", "memberIds", "memberCount", "updatedAt"
+        ]);
+    }
+
+    function isMemberRoomUpdate() {
+      return signedIn()
+        && request.auth.uid in resource.data.memberIds
+        && request.resource.data.code == resource.data.code
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.memberIds == resource.data.memberIds
+        && request.resource.data.memberCount == resource.data.memberCount
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "name", "lastMessageText", "lastMessageAuthorName", "lastMessageAt", "updatedAt"
+        ]);
+    }
+
+    function isValidRoomMessage(data) {
+      return data.keys().hasOnly(["userId", "authorName", "authorAvatar", "content", "attachment", "createdAt"])
+        && data.userId == request.auth.uid
+        && data.authorName is string
+        && data.authorName.size() > 0
+        && data.authorName.size() <= 80
+        && (data.authorAvatar == null || data.authorAvatar is string)
+        && data.content is string
+        && data.content.size() <= 1000
+        && (data.content.size() > 0 || data.attachment != null)
+        && isValidGlobalAttachment(data.attachment);
+    }
+
+    function isValidDirectThread(data) {
+      return data.keys().hasOnly([
+          "participantIds", "participantNames", "participantAvatars",
+          "lastMessageText", "lastMessageAuthorName", "lastMessageAt", "createdAt", "updatedAt"
+        ])
+        && data.participantIds is list
+        && data.participantIds.size() == 2
+        && request.auth.uid in data.participantIds
+        && data.participantNames is map
+        && data.participantAvatars is map
+        && data.lastMessageText is string
+        && data.lastMessageText.size() <= 1000
+        && data.lastMessageAuthorName is string
+        && data.lastMessageAuthorName.size() <= 80;
+    }
+
+    function canReadDirectThread(roomId, threadId) {
+      return isRoomMember(roomId)
+        && request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)/directThreads/$(threadId)).data.participantIds;
+    }
+
+    function isValidDirectMessage(data) {
+      return data.keys().hasOnly(["userId", "authorName", "authorAvatar", "content", "createdAt"])
+        && data.userId == request.auth.uid
+        && data.authorName is string
+        && data.authorName.size() > 0
+        && data.authorName.size() <= 80
+        && (data.authorAvatar == null || data.authorAvatar is string)
+        && data.content is string
+        && data.content.size() > 0
+        && data.content.size() <= 1000;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasOnly(["userId", "roomId", "title", "message", "kind", "read", "createdAt"])
+        && canCreateNotification(data)
+        && (data.roomId == null || isValidRoomId(data.roomId))
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 120
+        && data.message is string
+        && data.message.size() <= 500
+        && data.kind in ["room", "material", "message"]
+        && data.read is bool;
+    }
+
+    function canCreateNotification(data) {
+      return signedIn()
+        && data.userId is string
+        && (
+          data.userId == request.auth.uid
+          || (
+            data.roomId != null
+            && isValidRoomId(data.roomId)
+            && (
+              request.auth.uid == get(/databases/$(database)/documents/rooms/$(data.roomId)).data.ownerId
+              || (
+                data.userId == get(/databases/$(database)/documents/rooms/$(data.roomId)).data.ownerId
+                && request.auth.uid in get(/databases/$(database)/documents/rooms/$(data.roomId)).data.pendingRequestUserIds
+              )
+            )
+          )
+        );
+    }
+
     match /users/{userId} {
       allow read, create, update: if owns(userId);
       allow delete: if false;
     }
 
     match /uploads/{uploadId} {
-      allow read: if owns(resource.data.userId) || isSharedUpload();
-      allow create: if owns(request.resource.data.userId)
-        && request.resource.data.title is string
-        && request.resource.data.fileUrl is string
-        && request.resource.data.fileType in [
-          "pdf", "document", "archive", "image", "video", "text", "code", "link", "other"
-        ]
-        && request.resource.data.visibility in ["private", "shared"]
-        && request.resource.data.size <= 100 * 1024 * 1024;
+      allow read: if owns(resource.data.userId) || isSharedUpload() || canReadRoom(resource.data.roomId);
+      allow create: if isValidUpload(request.resource.data);
       allow update, delete: if owns(resource.data.userId);
     }
 
@@ -82,14 +275,14 @@ service cloud.firestore {
     }
 
     match /comments/{commentId} {
-      allow read: if signedIn();
-      allow create: if owns(request.resource.data.userId);
+      allow read: if canReadUpload(resource.data.uploadId);
+      allow create: if owns(request.resource.data.userId) && canReadUpload(request.resource.data.uploadId);
       allow update, delete: if owns(resource.data.userId);
     }
 
     match /chats/{messageId} {
-      allow read: if owns(resource.data.userId);
-      allow create: if owns(request.resource.data.userId);
+      allow read: if owns(resource.data.userId) && canReadRoom(resource.data.roomId);
+      allow create: if owns(request.resource.data.userId) && canReadRoom(request.resource.data.roomId);
       allow update, delete: if false;
     }
 
@@ -108,20 +301,57 @@ service cloud.firestore {
       allow update, delete: if owns(resource.data.userId);
     }
 
+    match /rooms/{roomId} {
+      allow get: if signedIn();
+      allow list: if signedIn() && request.auth.uid in resource.data.memberIds;
+      allow create: if owns(request.resource.data.ownerId)
+        && request.resource.data.code == roomId
+        && request.resource.data.memberIds.size() == 1
+        && request.resource.data.memberIds[0] == request.auth.uid
+        && isValidRoom(request.resource.data);
+      allow update: if isValidRoom(request.resource.data) && (isRequestingRoomAccess() || isOwnerRoomUpdate() || isMemberRoomUpdate());
+      allow delete: if owns(resource.data.ownerId);
+
+      match /messages/{messageId} {
+        allow read: if isRoomMember(roomId);
+        allow create: if isRoomMember(roomId) && isValidRoomMessage(request.resource.data);
+        allow update, delete: if false;
+      }
+
+      match /directThreads/{threadId} {
+        allow read: if isRoomMember(roomId) && request.auth.uid in resource.data.participantIds;
+        allow create: if isRoomMember(roomId) && isValidDirectThread(request.resource.data);
+        allow update: if isRoomMember(roomId)
+          && request.auth.uid in resource.data.participantIds
+          && request.resource.data.participantIds == resource.data.participantIds
+          && isValidDirectThread(request.resource.data);
+        allow delete: if false;
+
+        match /messages/{messageId} {
+          allow read: if canReadDirectThread(roomId, threadId);
+          allow create: if canReadDirectThread(roomId, threadId) && isValidDirectMessage(request.resource.data);
+          allow update, delete: if false;
+        }
+      }
+    }
+
     match /codeSnippets/{snippetId} {
-      allow read: if signedIn();
-      allow create: if owns(request.resource.data.userId) && isValidCodeSnippet(request.resource.data);
+      allow read: if canReadRoom(resource.data.roomId);
+      allow create: if owns(request.resource.data.userId)
+        && canReadRoom(request.resource.data.roomId)
+        && isValidCodeSnippet(request.resource.data);
       allow update: if owns(resource.data.userId)
         && request.resource.data.userId == resource.data.userId
+        && request.resource.data.roomId == resource.data.roomId
         && request.resource.data.createdAt == resource.data.createdAt
+        && canReadRoom(resource.data.roomId)
         && isValidCodeSnippet(request.resource.data);
       allow delete: if owns(resource.data.userId);
     }
 
-    match /activityLogs/{activityId} {
-      allow read: if owns(resource.data.userId);
-      allow create: if owns(request.resource.data.userId);
-      allow update, delete: if false;
+    match /notifications/{notificationId} {
+      allow read, update, delete: if owns(resource.data.userId);
+      allow create: if isValidNotification(request.resource.data);
     }
   }
 }

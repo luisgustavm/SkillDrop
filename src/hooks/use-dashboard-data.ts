@@ -1,38 +1,33 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { listenActivities } from "@/services/activity-service";
+import { isFirebaseConfigured } from "@/firebase/client";
 import { listenFavorites } from "@/services/favorite-service";
-import { listenUserUploads } from "@/services/upload-service";
-import type { ActivityLog } from "@/types/activity";
+import { listenRoomUploads, listenUserUploads } from "@/services/upload-service";
 import type { Favorite } from "@/types/favorite";
 import type { AcademicUpload } from "@/types/upload";
 
 type LoadedState = {
   uploads: boolean;
   favorites: boolean;
-  activities: boolean;
 };
 
 const initialLoadedState: LoadedState = {
   uploads: false,
   favorites: false,
-  activities: false,
 };
 
-export function useDashboardData(userId?: string) {
+export function useDashboardData(userId?: string, roomId?: string | null) {
   const [uploads, setUploads] = useState<AcademicUpload[]>([]);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
-  const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [loaded, setLoaded] = useState(initialLoadedState);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!userId) {
+    if (!userId || !isFirebaseConfigured) {
       setUploads([]);
       setFavorites([]);
-      setActivities([]);
-      setLoaded(initialLoadedState);
+      setLoaded(isFirebaseConfigured ? initialLoadedState : { uploads: true, favorites: true });
       return;
     }
 
@@ -45,17 +40,26 @@ export function useDashboardData(userId?: string) {
     };
 
     const handleOptionalError = () => {
-      setLoaded((state) => ({ ...state, favorites: true, activities: true }));
+      setLoaded((state) => ({ ...state, favorites: true }));
     };
 
-    const unsubscribeUploads = listenUserUploads(
-      userId,
-      (items) => {
-        setUploads(items);
-        setLoaded((state) => ({ ...state, uploads: true }));
-      },
-      handleRequiredError,
-    );
+    const unsubscribeUploads = roomId
+      ? listenRoomUploads(
+          roomId,
+          (items) => {
+            setUploads(items);
+            setLoaded((state) => ({ ...state, uploads: true }));
+          },
+          handleRequiredError,
+        )
+      : listenUserUploads(
+          userId,
+          (items) => {
+            setUploads(items);
+            setLoaded((state) => ({ ...state, uploads: true }));
+          },
+          handleRequiredError,
+        );
     const unsubscribeFavorites = listenFavorites(
       userId,
       (items) => {
@@ -64,21 +68,12 @@ export function useDashboardData(userId?: string) {
       },
       handleOptionalError,
     );
-    const unsubscribeActivities = listenActivities(
-      userId,
-      (items) => {
-        setActivities(items);
-        setLoaded((state) => ({ ...state, activities: true }));
-      },
-      handleOptionalError,
-    );
 
     return () => {
       unsubscribeUploads();
       unsubscribeFavorites();
-      unsubscribeActivities();
     };
-  }, [userId]);
+  }, [roomId, userId]);
 
   const stats = useMemo(
     () => ({
@@ -93,7 +88,6 @@ export function useDashboardData(userId?: string) {
   return {
     uploads,
     favorites,
-    activities,
     stats,
     loading: !loaded.uploads,
     error,

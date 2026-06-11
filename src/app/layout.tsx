@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     default: "SkillDrop",
     template: "%s | SkillDrop",
   },
-  description: "Plataforma moderna para organizar, enviar e compartilhar atividades acadêmicas.",
+  description: "Plataforma academica para organizar materiais, criar salas privadas e compartilhar arquivos.",
   icons: {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml", sizes: "any" }],
     shortcut: "/favicon.svg",

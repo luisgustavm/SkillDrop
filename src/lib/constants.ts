@@ -1,10 +1,11 @@
 export const APP_NAME = "SkillDrop";
 
-export const PRIVATE_ROUTES = ["/dashboard", "/uploads", "/editor", "/chat", "/global-chat", "/shared"];
+export const PRIVATE_ROUTES = ["/dashboard", "/uploads", "/editor", "/chat", "/rooms", "/global-chat", "/shared", "/profile"];
 
 export const AUTH_ROUTES = ["/login", "/register", "/reset-password"];
 
 export const MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024;
+export const MAX_INLINE_SHARED_FILE_BYTES = 640 * 1024;
 
 export const ACCEPTED_EXTENSIONS = [
   "pdf",

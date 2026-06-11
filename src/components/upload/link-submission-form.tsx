@@ -16,9 +16,10 @@ import { saveLinkUpload } from "@/services/upload-service";
 
 type LinkSubmissionFormProps = {
   userId: string;
+  roomId: string;
 };
 
-export function LinkSubmissionForm({ userId }: LinkSubmissionFormProps) {
+export function LinkSubmissionForm({ userId, roomId }: LinkSubmissionFormProps) {
   const form = useForm<LinkUploadFormValues>({
     resolver: zodResolver(linkUploadSchema),
     defaultValues: {
@@ -48,6 +49,7 @@ export function LinkSubmissionForm({ userId }: LinkSubmissionFormProps) {
           try {
             await saveLinkUpload({
               userId,
+              roomId,
               url: values.url,
               metadata: {
                 title: values.title,
